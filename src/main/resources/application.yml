@@ -1,0 +1,92 @@
+spring:
+  config:
+    import: "optional:dotenv:.env"
+  application:
+    name: flood-service-community
+
+  datasource:
+    # Spring Boot needs jdbc:postgresql:// format.
+    # If DATABASE_URL starts with "postgresql://" (Neon native format), add the jdbc: prefix in the env var.
+    # Example: jdbc:postgresql://HOST/DBNAME?sslmode=require&user=USER&password=PASS
+    url: ${DATABASE_URL}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      # Neon PostgreSQL closes idle connections after ~5 minutes.
+      # max-lifetime must be shorter than that so HikariCP retires connections
+      # before Neon closes them, eliminating "connection has been closed" warnings.
+      idle-timeout: 120000       # 2 min  — evict idle connections quickly
+      max-lifetime: 240000       # 4 min  — retire connections before Neon's 5-min cutoff
+      keepalive-time: 60000      # 1 min  — send a keepalive ping to hold active connections
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update          # Creates missing tables (community_*), leaves existing tables intact
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+  data:
+    redis:
+      url: ${REDIS_URL:}      # Upstash URL e.g. rediss://default:token@host:6379
+      # If REDIS_URL is empty, RedisConfig falls back to ConcurrentMapCache (local dev)
+
+  mail:
+    host: smtp.resend.com
+    port: 465
+    username: resend
+    password: ${RESEND_API_KEY:}   # empty = dev mode, emails logged to console instead
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+server:
+  port: ${PORT:4001}    # Community service runs on 4001
+  error:
+    include-message: never         # Don't leak stack traces in production
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+# ── Application-specific properties ──────────────────────────────────────────
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    refresh-secret: ${JWT_REFRESH_SECRET}
+    access-token-expiry-ms: 86400000      # 24 hours
+    refresh-token-expiry-ms: 604800000    # 7 days
+  environment: ${NODE_ENV:development}
+  email:
+    from-address: ${EMAIL_FROM:noreply@yourdomain.com}
+    resend-api-key: ${RESEND_API_KEY:}
+    # Redirect all emails to this address in development (Resend test domain restriction)
+    dev-recipient: ${DEV_EMAIL_RECIPIENT:}
+  admin:
+    seed-email: ${ADMIN_SEED_EMAIL:}
+    seed-password: ${ADMIN_SEED_PASSWORD:}
+    seed-first-name: ${ADMIN_SEED_FIRST_NAME:Admin}
+    seed-last-name: ${ADMIN_SEED_LAST_NAME:User}

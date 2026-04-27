@@ -1,0 +1,11 @@
+# ── Environment files — committed intentionally for portability between PCs ───
+
+# ── Maven build output ────────────────────────────────────────────────────────
+target/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+.classpath
+.project
+.settings/

@@ -1,0 +1,9 @@
+target/
+*.md
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+run.bat
