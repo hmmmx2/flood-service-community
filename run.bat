@@ -30,4 +30,4 @@ echo  Starting on http://localhost:%PORT%
 echo  Press Ctrl+C to stop
 echo.
 
-call mvnw.cmd spring-boot:run
+call mvnw.cmd spring-boot:run -Dmaven.test.skip=true
