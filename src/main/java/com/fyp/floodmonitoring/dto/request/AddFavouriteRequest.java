@@ -1,7 +1,5 @@
 package com.fyp.floodmonitoring.dto.request;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
-import java.util.UUID;
-
-public record AddFavouriteRequest(@NotNull UUID nodeId) {}
+public record AddFavouriteRequest(@NotBlank String nodeId) {}

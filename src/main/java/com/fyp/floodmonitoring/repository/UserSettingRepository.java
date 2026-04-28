@@ -24,4 +24,8 @@ public interface UserSettingRepository extends JpaRepository<UserSetting, UUID> 
            ON CONFLICT (user_id, key) DO NOTHING
            """, nativeQuery = true)
     void upsertDefault(UUID userId, String key);
+
+    @Modifying
+    @Query("DELETE FROM UserSetting s WHERE s.userId = :userId")
+    void deleteByUserId(UUID userId);
 }

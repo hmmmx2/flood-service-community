@@ -40,7 +40,8 @@ class SensorControllerTest {
             "uuid-" + nodeId, nodeId, "Node " + nodeId, status,
             "1.2 km", List.of(110.3592, 1.5533),
             "Kuching", "Sungai Sarawak", "Sarawak",
-            level, false, "2025-01-01T10:00:00Z", "2024-01-01T00:00:00Z"
+            level, false, "2025-01-01T10:00:00Z", "2024-01-01T00:00:00Z",
+            1.5533, 110.3592
         );
     }
 

@@ -17,6 +17,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -35,8 +36,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     }
 )
 @Import(TestSecurityConfig.class)
+@TestPropertySource(properties = "app.ingest.api-key=test-ingest-key")
 @DisplayName("IngestController Tests")
 class IngestControllerTest {
+
+    /** Matches the test property override above. */
+    private static final String VALID_API_KEY = "test-ingest-key";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
@@ -57,6 +62,7 @@ class IngestControllerTest {
             );
 
             mockMvc.perform(post("/ingest")
+                    .header("X-API-Key", VALID_API_KEY)
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(req)))
@@ -77,6 +83,7 @@ class IngestControllerTest {
             );
 
             mockMvc.perform(post("/ingest")
+                    .header("X-API-Key", VALID_API_KEY)
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(req)))
@@ -140,8 +147,9 @@ class IngestControllerTest {
 
             IngestRequest req = new IngestRequest("102782478", 0, null, null, null, null, null, null);
 
-            // No Authorization header — should still work
+            // No JWT Authorization header — IoT devices authenticate via X-API-Key only
             mockMvc.perform(post("/ingest")
+                    .header("X-API-Key", VALID_API_KEY)
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(req)))
@@ -160,6 +168,7 @@ class IngestControllerTest {
                 """;
 
             mockMvc.perform(post("/ingest")
+                    .header("X-API-Key", VALID_API_KEY)
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(minimalJson))

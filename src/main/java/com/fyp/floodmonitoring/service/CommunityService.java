@@ -204,15 +204,19 @@ public class CommunityService {
     public LikeToggleDto toggleLike(UUID postId, UUID userId) {
         CommunityPost post = postRepo.findById(postId)
                 .orElseThrow(() -> AppException.notFound("Post not found"));
+        // Capture the count now — adjustLikes uses a @Modifying JPQL UPDATE which
+        // bypasses the JPA first-level cache, so post.getLikesCount() would be stale
+        // after the call.  Computing from the snapshot avoids the race-window bug.
+        int currentCount = post.getLikesCount();
         boolean alreadyLiked = likeRepo.existsByPostIdAndUserId(postId, userId);
         if (alreadyLiked) {
             likeRepo.deleteByPostIdAndUserId(postId, userId);
             postRepo.adjustLikes(postId, -1);
-            return new LikeToggleDto(false, post.getLikesCount() - 1);
+            return new LikeToggleDto(false, Math.max(0, currentCount - 1));
         } else {
             likeRepo.save(CommunityPostLike.builder().postId(postId).userId(userId).build());
             postRepo.adjustLikes(postId, 1);
-            return new LikeToggleDto(true, post.getLikesCount() + 1);
+            return new LikeToggleDto(true, currentCount + 1);
         }
     }
 

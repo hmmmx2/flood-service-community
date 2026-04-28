@@ -2,6 +2,8 @@ package com.fyp.floodmonitoring.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
@@ -21,6 +23,7 @@ public class CommunityPost {
     /** Nullable — posts not in any group appear in the global feed only */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "group_id")
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private CommunityGroup group;
 
     @ManyToOne(fetch = FetchType.LAZY)

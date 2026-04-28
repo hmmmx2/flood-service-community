@@ -1,5 +1,6 @@
 package com.fyp.floodmonitoring.security;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,8 +45,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }
-        } catch (Exception ex) {
-            log.error("JWT filter error: {}", ex.getMessage());
+        } catch (JwtException | IllegalArgumentException ex) {
+            log.warn("JWT filter error: {}", ex.getMessage());
         }
 
         filterChain.doFilter(request, response);

@@ -5,14 +5,12 @@ FROM eclipse-temurin:21-jdk-alpine AS builder
 
 WORKDIR /app
 
-# Copy Maven wrapper and pom first (layer cache — only re-downloads deps when pom changes)
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
 RUN chmod +x mvnw && ./mvnw dependency:go-offline -q
 
-# Copy source and build
 COPY src ./src
-RUN ./mvnw package -DskipTests -q
+RUN ./mvnw package "-Dmaven.test.skip=true" -q
 
 # ─────────────────────────────────────────────
 # Stage 2: Minimal runtime image
@@ -21,19 +19,21 @@ FROM eclipse-temurin:21-jre-alpine AS runtime
 
 WORKDIR /app
 
-# Create non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+USER root
+RUN apk add --no-cache curl
 
-# Copy only the built JAR from builder stage
+ARG SERVER_PORT=4001
+ENV PORT=${SERVER_PORT}
+
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 COPY --from=builder /app/target/*.jar app.jar
 
-# Expose API port
-EXPOSE 3001
+USER appuser
 
-# Health check — hits Spring Actuator endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD wget -qO- http://localhost:3001/actuator/health || exit 1
+EXPOSE ${SERVER_PORT}
 
-# Run the JAR
-ENTRYPOINT ["java", "-jar", "-Dserver.port=3001", "app.jar"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+  CMD curl -fsS "http://127.0.0.1:${PORT}/actuator/health" || exit 1
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar -Dserver.port=${PORT} app.jar"]

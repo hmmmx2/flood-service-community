@@ -72,8 +72,8 @@ public class CommunityController {
             Authentication auth) {
         // Whitelist sort values — reject anything other than "new" or "top"
         String safeSort = "top".equalsIgnoreCase(sort) ? "top" : "new";
-        // Clamp page size to a safe range
-        int safeSize = Math.max(1, Math.min(size, 100));
+        // Clamp page size — max 50 per page
+        int safeSize = Math.max(1, Math.min(size, 50));
         return ResponseEntity.ok(
                 communityService.listPosts(page, safeSize, safeSort, group, search, resolveUserId(auth)));
     }
@@ -120,6 +120,40 @@ public class CommunityController {
     public ResponseEntity<Void> deleteComment(
             @PathVariable UUID postId, @PathVariable UUID commentId, Authentication auth) {
         communityService.deleteComment(commentId, requireUserId(auth), hasRole(auth, "ROLE_ADMIN"));
+        return ResponseEntity.noContent().build();
+    }
+
+    // ══ ADMIN ENDPOINTS ═══════════════════════════════════════════════════════
+
+    @GetMapping("/admin/posts")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+    public ResponseEntity<Page<CommunityPostDto>> adminListPosts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "new") String sort) {
+        String safeSort = "top".equalsIgnoreCase(sort) ? "top" : "new";
+        int safeSize = Math.max(1, Math.min(size, 50));
+        return ResponseEntity.ok(
+                communityService.listPosts(page, safeSize, safeSort, null, null, null));
+    }
+
+    @DeleteMapping("/admin/posts/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+    public ResponseEntity<Void> adminDeletePost(@PathVariable UUID id) {
+        communityService.deletePost(id, null, true);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/admin/groups")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+    public ResponseEntity<List<CommunityGroupDto>> adminListGroups() {
+        return ResponseEntity.ok(communityService.listGroups(null));
+    }
+
+    @DeleteMapping("/admin/groups/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+    public ResponseEntity<Void> adminDeleteGroup(@PathVariable UUID id) {
+        communityService.deleteGroup(id);
         return ResponseEntity.noContent().build();
     }
 

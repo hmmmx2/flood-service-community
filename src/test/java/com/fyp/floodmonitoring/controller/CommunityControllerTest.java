@@ -291,7 +291,7 @@ class CommunityControllerTest {
             PageImpl<CommunityPostDto> page = new PageImpl<>(
                 List.of(samplePost), PageRequest.of(0, 20), 1
             );
-            when(communityService.listPosts(anyInt(), anyInt(), anyString(), any(), any()))
+            when(communityService.listPosts(anyInt(), anyInt(), anyString(), any(), any(), any()))
                 .thenReturn(page);
 
             mockMvc.perform(get("/community/posts"))
@@ -309,7 +309,7 @@ class CommunityControllerTest {
         @DisplayName("accepts pagination and sort parameters")
         void listPosts_WithParams_PassesParamsToService() throws Exception {
             PageImpl<CommunityPostDto> page = new PageImpl<>(Collections.emptyList());
-            when(communityService.listPosts(eq(1), eq(10), eq("top"), any(), any()))
+            when(communityService.listPosts(eq(1), eq(10), eq("top"), any(), any(), any()))
                 .thenReturn(page);
 
             mockMvc.perform(get("/community/posts")
@@ -318,7 +318,7 @@ class CommunityControllerTest {
                     .param("sort", "top"))
                 .andExpect(status().isOk());
 
-            verify(communityService).listPosts(eq(1), eq(10), eq("top"), isNull(), any());
+            verify(communityService).listPosts(eq(1), eq(10), eq("top"), isNull(), any(), any());
         }
 
         @Test
@@ -326,21 +326,21 @@ class CommunityControllerTest {
         @DisplayName("filters posts by group slug")
         void listPosts_WithGroupFilter_PassesGroupToService() throws Exception {
             PageImpl<CommunityPostDto> page = new PageImpl<>(List.of(samplePost));
-            when(communityService.listPosts(anyInt(), anyInt(), anyString(), eq("flood-watch"), any()))
+            when(communityService.listPosts(anyInt(), anyInt(), anyString(), eq("flood-watch"), any(), any()))
                 .thenReturn(page);
 
             mockMvc.perform(get("/community/posts")
                     .param("group", "flood-watch"))
                 .andExpect(status().isOk());
 
-            verify(communityService).listPosts(anyInt(), anyInt(), anyString(), eq("flood-watch"), any());
+            verify(communityService).listPosts(anyInt(), anyInt(), anyString(), eq("flood-watch"), any(), any());
         }
 
         @Test
         @DisplayName("returns 200 for unauthenticated request (public read endpoint)")
         void listPosts_NoAuth_Returns200() throws Exception {
             PageImpl<CommunityPostDto> page = new PageImpl<>(Collections.emptyList());
-            when(communityService.listPosts(anyInt(), anyInt(), anyString(), isNull(), isNull()))
+            when(communityService.listPosts(anyInt(), anyInt(), anyString(), isNull(), isNull(), isNull()))
                 .thenReturn(page);
 
             mockMvc.perform(get("/community/posts"))

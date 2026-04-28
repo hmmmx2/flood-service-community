@@ -5,6 +5,8 @@ import com.fyp.floodmonitoring.dto.request.UpdateAdminUserRequest;
 import com.fyp.floodmonitoring.dto.response.AdminUserDto;
 import com.fyp.floodmonitoring.entity.User;
 import com.fyp.floodmonitoring.exception.AppException;
+import com.fyp.floodmonitoring.repository.RefreshTokenRepository;
+import com.fyp.floodmonitoring.repository.UserFavouriteNodeRepository;
 import com.fyp.floodmonitoring.repository.UserRepository;
 import com.fyp.floodmonitoring.repository.UserSettingRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,8 @@ public class AdminUserService {
 
     private final UserRepository userRepository;
     private final UserSettingRepository settingRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final UserFavouriteNodeRepository favouriteNodeRepository;
     private final PasswordEncoder passwordEncoder;
 
     // ── List all users ────────────────────────────────────────────────────────
@@ -91,6 +95,9 @@ public class AdminUserService {
         if (!userRepository.existsById(id)) {
             throw AppException.notFound("User not found");
         }
+        refreshTokenRepository.deleteAllByUserId(id);
+        settingRepository.deleteByUserId(id);
+        favouriteNodeRepository.deleteByIdUserId(id);
         userRepository.deleteById(id);
     }
 

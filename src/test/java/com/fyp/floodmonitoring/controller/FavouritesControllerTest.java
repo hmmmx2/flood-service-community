@@ -104,7 +104,7 @@ class FavouritesControllerTest {
             when(favouritesService.addFavourite(any(), any())).thenReturn(sampleFavourite);
 
             UUID nodeId = UUID.randomUUID();
-            AddFavouriteRequest req = new AddFavouriteRequest(nodeId);
+            AddFavouriteRequest req = new AddFavouriteRequest(nodeId.toString());
 
             mockMvc.perform(post("/favourites")
                     .with(csrf())
@@ -129,7 +129,7 @@ class FavouritesControllerTest {
         @Test
         @DisplayName("returns 401 when unauthenticated")
         void addFavourite_NoAuth_Returns401() throws Exception {
-            AddFavouriteRequest req = new AddFavouriteRequest(UUID.randomUUID());
+            AddFavouriteRequest req = new AddFavouriteRequest(UUID.randomUUID().toString());
 
             mockMvc.perform(post("/favourites")
                     .with(csrf())
@@ -148,12 +148,12 @@ class FavouritesControllerTest {
         @DisplayName("returns 204 on successful removal")
         void removeFavourite_ValidNodeId_Returns204() throws Exception {
             UUID nodeId = UUID.randomUUID();
-            doNothing().when(favouritesService).removeFavourite(any(), eq(nodeId));
+            doNothing().when(favouritesService).removeFavourite(any(), eq(nodeId.toString()));
 
             mockMvc.perform(delete("/favourites/" + nodeId).with(csrf()))
                 .andExpect(status().isNoContent());
 
-            verify(favouritesService).removeFavourite(any(), eq(nodeId));
+            verify(favouritesService).removeFavourite(any(), eq(nodeId.toString()));
         }
 
         @Test

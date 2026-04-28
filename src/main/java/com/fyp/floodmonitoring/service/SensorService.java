@@ -50,7 +50,9 @@ public class SensorService {
                 level,
                 dead,
                 formatInstant(n.getLastUpdated()),
-                formatInstant(n.getCreatedAt()));
+                formatInstant(n.getCreatedAt()),
+                n.getLatitude(),
+                n.getLongitude());
     }
 
     private String resolveStatus(int level, boolean isDead) {

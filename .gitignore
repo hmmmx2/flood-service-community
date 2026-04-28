@@ -1,4 +1,9 @@
-# ── Environment files — committed intentionally for portability between PCs ───
+# ── Environment files — never commit secrets ─────────────────────────────────
+.env
+.env.local
+.env.production
+.env.*
+!.env.example
 
 # ── Maven build output ────────────────────────────────────────────────────────
 target/

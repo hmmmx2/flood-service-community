@@ -58,7 +58,7 @@ public class FavouritesService {
      */
     @Transactional
     public FavouriteNodeDto addFavourite(UUID userId, AddFavouriteRequest req) {
-        Node node = nodeRepository.findById(req.nodeId())
+        Node node = nodeRepository.findByNodeId(req.nodeId())
                 .orElseThrow(() -> AppException.notFound("Node not found: " + req.nodeId()));
 
         UserFavouriteNodeId pk = new UserFavouriteNodeId(userId, node.getId());
@@ -75,8 +75,10 @@ public class FavouritesService {
      * Removes the bookmark. No-op if the user has not bookmarked the node.
      */
     @Transactional
-    public void removeFavourite(UUID userId, UUID nodeId) {
-        favRepository.deleteById(new UserFavouriteNodeId(userId, nodeId));
+    public void removeFavourite(UUID userId, String nodeId) {
+        Node node = nodeRepository.findByNodeId(nodeId)
+                .orElseThrow(() -> AppException.notFound("Node not found: " + nodeId));
+        favRepository.deleteById(new UserFavouriteNodeId(userId, node.getId()));
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

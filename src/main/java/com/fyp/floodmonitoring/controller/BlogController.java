@@ -40,6 +40,7 @@ public class BlogController {
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false)    String category) {
+        size = Math.max(1, Math.min(size, 100));
         return ResponseEntity.ok(blogService.getAllBlogs(page, size, category));
     }
 
@@ -60,6 +61,13 @@ public class BlogController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BlogDto> updateBlog(@PathVariable UUID id,
                                               @Valid @RequestBody UpdateBlogRequest req) {
+        return ResponseEntity.ok(blogService.updateBlog(id, req));
+    }
+
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<BlogDto> patchBlog(@PathVariable UUID id,
+                                             @Valid @RequestBody UpdateBlogRequest req) {
         return ResponseEntity.ok(blogService.updateBlog(id, req));
     }
 

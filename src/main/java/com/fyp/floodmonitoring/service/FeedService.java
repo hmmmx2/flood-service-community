@@ -34,7 +34,13 @@ public class FeedService {
         List<Event> rows;
 
         if (cursor != null && !cursor.isBlank()) {
-            Event pivot = eventRepository.findById(UUID.fromString(cursor))
+            UUID cursorId;
+            try {
+                cursorId = UUID.fromString(cursor);
+            } catch (IllegalArgumentException e) {
+                throw AppException.badRequest("INVALID_CURSOR", "Invalid pagination cursor format");
+            }
+            Event pivot = eventRepository.findById(cursorId)
                     .orElseThrow(() -> AppException.badRequest("INVALID_CURSOR", "Invalid pagination cursor"));
             rows = eventRepository.findPageAfterCursor(pivot.getCreatedAt(), PAGE_SIZE + 1);
         } else {
@@ -58,7 +64,13 @@ public class FeedService {
 
     @Transactional(readOnly = true)
     public FeedItemDto getFeedItem(String id) {
-        Event event = eventRepository.findById(UUID.fromString(id))
+        UUID eventId;
+        try {
+            eventId = UUID.fromString(id);
+        } catch (IllegalArgumentException e) {
+            throw AppException.badRequest("INVALID_ID", "Invalid ID format");
+        }
+        Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> AppException.notFound("Feed item not found"));
         return toFeedItem(event);
     }

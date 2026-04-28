@@ -46,6 +46,9 @@ public class ProfileService {
         if (req.locationLabel() != null) {
             user.setLocationLabel(req.locationLabel().isBlank() ? null : req.locationLabel().trim());
         }
+        if (req.avatarUrl() != null) {
+            user.setAvatarUrl(req.avatarUrl().isBlank() ? null : req.avatarUrl().trim());
+        }
 
         user = userRepository.save(user);
         return toDto(user);

@@ -49,7 +49,7 @@ public class FavouritesController {
     @DeleteMapping("/{nodeId}")
     public ResponseEntity<Void> removeFavourite(
             @AuthenticationPrincipal UserDetails principal,
-            @PathVariable UUID nodeId) {
+            @PathVariable String nodeId) {
 
         UUID userId = UUID.fromString(principal.getUsername());
         favouritesService.removeFavourite(userId, nodeId);

@@ -10,5 +10,6 @@ public record UpdateProfileRequest(
         @Size(max = 100) String firstName,
         @Size(max = 100) String lastName,
         @Size(max = 50)  String phone,
-        @Size(max = 255) String locationLabel
+        @Size(max = 255) String locationLabel,
+        @Size(max = 2048) String avatarUrl   // optional — null means no change
 ) {}

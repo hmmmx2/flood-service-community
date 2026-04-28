@@ -48,10 +48,11 @@ public class AuthController {
     public ResponseEntity<Map<String, String>> refresh(@RequestBody Map<String, String> body) {
         String refreshToken = body.get("refreshToken");
         if (refreshToken == null || refreshToken.isBlank()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest()
+                    .body(Map.of("code", "INVALID_REFRESH_TOKEN", "message", "Refresh token is missing or invalid"));
         }
         String accessToken = authService.refreshAccessToken(refreshToken);
-        return ResponseEntity.ok(Map.of("accessToken", accessToken));
+        return ResponseEntity.ok(Map.of("accessToken", accessToken, "refreshToken", refreshToken));
     }
 
     @PostMapping("/forgot-password")

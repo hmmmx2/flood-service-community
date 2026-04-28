@@ -46,10 +46,11 @@ public class TestSecurityConfig {
                     "/auth/login", "/auth/register", "/auth/refresh",
                     "/auth/forgot-password", "/auth/verify-reset-code",
                     "/auth/reset-password", "/ingest").permitAll()
-                // ── Public read endpoints ─────────────────────────────────────
+                // ── Public read endpoints (mirrors production SecurityConfig) ─────
                 .requestMatchers(HttpMethod.GET,
                     "/sensors", "/sensors/**",
                     "/blogs", "/blogs/**",
+                    "/safety", "/safety/**",
                     "/community/posts", "/community/posts/**",
                     "/community/groups", "/community/groups/**").permitAll()
                 .requestMatchers("/actuator/health").permitAll()

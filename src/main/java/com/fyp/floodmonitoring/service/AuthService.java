@@ -41,6 +41,9 @@ public class AuthService {
     @Value("${app.jwt.refresh-token-expiry-ms}")
     private long refreshTokenExpiryMs;
 
+    @Value("${app.jwt.access-token-expiry-ms}")
+    private long accessTokenExpiryMs;
+
     @Value("${app.environment}")
     private String environment;
 
@@ -223,7 +226,7 @@ public class AuthService {
                 .build();
         refreshTokenRepository.save(rt);
 
-        Instant accessExpiresAt = Instant.now().plusSeconds(900);
+        Instant accessExpiresAt = Instant.now().plusMillis(accessTokenExpiryMs);
         AuthSessionDto session = new AuthSessionDto(accessToken, refreshToken, accessExpiresAt.toString());
         String displayName = (user.getFirstName() + " " + user.getLastName()).trim();
         UserSummaryDto userDto = new UserSummaryDto(

@@ -5,6 +5,7 @@ import com.fyp.floodmonitoring.dto.response.DashboardTimeSeriesDto;
 import com.fyp.floodmonitoring.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,6 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/dashboard")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER') or hasRole('FIELD_TECHNICIAN') or hasRole('VIEWER')")
 public class DashboardController {
 
     private final DashboardService dashboardService;

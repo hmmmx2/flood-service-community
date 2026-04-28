@@ -4,6 +4,7 @@ import com.fyp.floodmonitoring.dto.request.CreateAdminUserRequest;
 import com.fyp.floodmonitoring.dto.request.UpdateAdminUserRequest;
 import com.fyp.floodmonitoring.dto.response.AdminUserDto;
 import com.fyp.floodmonitoring.service.AdminUserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,14 +31,14 @@ public class AdminUserController {
     }
 
     @PostMapping
-    public ResponseEntity<AdminUserDto> createUser(@RequestBody CreateAdminUserRequest req) {
+    public ResponseEntity<AdminUserDto> createUser(@Valid @RequestBody CreateAdminUserRequest req) {
         return ResponseEntity.ok(adminUserService.createUser(req));
     }
 
     @PatchMapping("/{id}")
     public ResponseEntity<AdminUserDto> updateUser(
             @PathVariable UUID id,
-            @RequestBody UpdateAdminUserRequest req) {
+            @Valid @RequestBody UpdateAdminUserRequest req) {
         return ResponseEntity.ok(adminUserService.updateUser(id, req));
     }
 

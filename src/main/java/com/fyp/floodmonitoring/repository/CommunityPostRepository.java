@@ -47,11 +47,11 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, UU
     Page<CommunityPost> searchByGroupAndLikesDesc(
             @Param("groupId") UUID groupId, @Param("q") String query, Pageable pageable);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE CommunityPost p SET p.likesCount = p.likesCount + :delta WHERE p.id = :id")
     void adjustLikes(@Param("id") UUID id, @Param("delta") int delta);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE CommunityPost p SET p.commentsCount = p.commentsCount + :delta WHERE p.id = :id")
     void adjustComments(@Param("id") UUID id, @Param("delta") int delta);
 }

@@ -1,9 +1,14 @@
 package com.fyp.floodmonitoring.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
+import org.springframework.cache.interceptor.CacheErrorHandler;
+import org.springframework.cache.interceptor.SimpleCacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -27,9 +32,10 @@ import java.time.Duration;
  *   "dashboard"   — 1 minute
  *   "safety"      — 60 minutes (seeded text, rarely changes)
  */
+@Slf4j
 @Configuration
 @EnableCaching
-public class RedisConfig {
+public class RedisConfig implements CachingConfigurer {
 
     private static final String[] CACHE_NAMES =
             {"analytics", "sensors", "blogs", "dashboard", "safety", "zones"};
@@ -78,5 +84,32 @@ public class RedisConfig {
 
         // Fallback: in-memory cache for local dev (no Redis)
         return new ConcurrentMapCacheManager(CACHE_NAMES);
+    }
+
+    /**
+     * Swallow Redis connection errors so cached methods still execute
+     * (without caching) when Redis is unavailable in local/dev environments.
+     */
+    @Override
+    public CacheErrorHandler errorHandler() {
+        return new SimpleCacheErrorHandler() {
+            @Override
+            public void handleCacheGetError(RuntimeException ex, Cache cache, Object key) {
+                log.warn("Cache GET error on '{}' key='{}': {} — proceeding without cache",
+                        cache.getName(), key, ex.getMessage());
+            }
+            @Override
+            public void handleCachePutError(RuntimeException ex, Cache cache, Object key, Object value) {
+                log.warn("Cache PUT error on '{}' key='{}': {}", cache.getName(), key, ex.getMessage());
+            }
+            @Override
+            public void handleCacheEvictError(RuntimeException ex, Cache cache, Object key) {
+                log.warn("Cache EVICT error on '{}' key='{}': {}", cache.getName(), key, ex.getMessage());
+            }
+            @Override
+            public void handleCacheClearError(RuntimeException ex, Cache cache) {
+                log.warn("Cache CLEAR error on '{}': {}", cache.getName(), ex.getMessage());
+            }
+        };
     }
 }

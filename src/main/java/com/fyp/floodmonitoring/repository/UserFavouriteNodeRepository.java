@@ -14,4 +14,6 @@ public interface UserFavouriteNodeRepository extends JpaRepository<UserFavourite
     List<UserFavouriteNode> findByIdUserId(UUID userId);
 
     boolean existsByIdUserIdAndIdNodeId(UUID userId, UUID nodeId);
+
+    void deleteByIdUserId(UUID userId);
 }

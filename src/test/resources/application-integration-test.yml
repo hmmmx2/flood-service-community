@@ -1,0 +1,64 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  data:
+    redis:
+      url: ""   # empty string → RedisConfig falls back to ConcurrentMapCacheManager
+
+  mail:
+    host: localhost
+    port: 25
+    username: test
+    password: test
+    properties:
+      mail:
+        smtp:
+          auth: false
+          ssl:
+            enable: false
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.data.redis.RedisHealthContributorAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.data.redis.RedisReactiveHealthContributorAutoConfiguration
+
+app:
+  jwt:
+    secret: dGVzdC1zZWNyZXQta2V5LWZvci1pbnRlZ3JhdGlvbi10ZXN0aW5nLW9ubHktMzI=
+    refresh-secret: dGVzdC1yZWZyZXNoLXNlY3JldC1rZXktZm9yLWludGVncmF0aW9uLXRlc3Q=
+    access-token-expiry-ms: 900000
+    refresh-token-expiry-ms: 604800000
+  ingest:
+    api-key: test-api-key
+  cors:
+    allowed-origins: http://localhost:3000
+  environment: test
+  email:
+    from-address: noreply@test.com
+    resend-api-key: ""
+    dev-recipient: ""
+  admin:
+    seed-email: ""
+    seed-password: ""
+    seed-first-name: Admin
+    seed-last-name: User
+
+server:
+  port: 0

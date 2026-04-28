@@ -62,6 +62,13 @@ public class GlobalExceptionHandler {
                 .body(new ApiErrorResponse("FORBIDDEN", "Access denied"));
     }
 
+    // ── Resource not found (unknown routes) ───────────────────────────────────
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleNotFound(Exception e) {
+        return ResponseEntity.status(404).body(new ApiErrorResponse("NOT_FOUND", "Resource not found"));
+    }
+
     // ── Catch-all ─────────────────────────────────────────────────────────────
 
     @ExceptionHandler(Exception.class)

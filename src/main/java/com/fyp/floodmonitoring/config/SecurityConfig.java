@@ -1,6 +1,7 @@
 package com.fyp.floodmonitoring.config;
 
 import com.fyp.floodmonitoring.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * <p>Stateless JWT authentication — no sessions, no CSRF.
  * Public endpoints: /auth/** and /health (actuator).
  * Everything else requires a valid Bearer token.</p>
+ *
+ * // TODO: Consider adding /api/v1 prefix for versioning in next major release
  */
 @Configuration
 @EnableWebSecurity
@@ -51,18 +54,34 @@ public class SecurityConfig {
                     "/auth/forgot-password",
                     "/auth/verify-reset-code",
                     "/auth/reset-password",
-                    "/ingest").permitAll()         // IoT devices — no JWT
+                    "/ingest").permitAll()         // IoT devices — API-key validated in controller
                 .requestMatchers(HttpMethod.GET,
                     "/sensors",
                     "/sensors/**",
                     "/blogs",
                     "/blogs/**",
+                    "/safety",
+                    "/safety/**",
                     "/community/posts",
                     "/community/posts/**",
                     "/community/groups",
                     "/community/groups/**").permitAll()  // public read
                 .requestMatchers("/actuator/health").permitAll()
                 .anyRequest().authenticated()
+            )
+
+            // Structured JSON error responses for auth failures
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((req, res, e) -> {
+                    res.setContentType("application/json");
+                    res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    res.getWriter().write("{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}");
+                })
+                .accessDeniedHandler((req, res, e) -> {
+                    res.setContentType("application/json");
+                    res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    res.getWriter().write("{\"code\":\"FORBIDDEN\",\"message\":\"Access denied\"}");
+                })
             )
 
             // JWT filter runs before the username/password filter
