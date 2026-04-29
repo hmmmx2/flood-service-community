@@ -207,7 +207,7 @@ public class CommunityService {
         // Capture the count now — adjustLikes uses a @Modifying JPQL UPDATE which
         // bypasses the JPA first-level cache, so post.getLikesCount() would be stale
         // after the call.  Computing from the snapshot avoids the race-window bug.
-        int currentCount = post.getLikesCount();
+        int currentCount = Math.max(0, post.getLikesCount());
         boolean alreadyLiked = likeRepo.existsByPostIdAndUserId(postId, userId);
         if (alreadyLiked) {
             likeRepo.deleteByPostIdAndUserId(postId, userId);
@@ -265,7 +265,7 @@ public class CommunityService {
                 g != null ? g.getSlug() : null,
                 g != null ? g.getName() : null,
                 p.getTitle(), p.getContent(), p.getImageUrl(),
-                p.getLikesCount(), p.getCommentsCount(), likedByMe,
+                Math.max(0, p.getLikesCount()), p.getCommentsCount(), likedByMe,
                 p.getCreatedAt(), p.getUpdatedAt(), comments
         );
     }

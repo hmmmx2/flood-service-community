@@ -5,14 +5,15 @@ spring:
     name: flood-service-community
 
   datasource:
-    # Spring Boot needs jdbc:postgresql:// format.
-    # If DATABASE_URL starts with "postgresql://" (Neon native format), add the jdbc: prefix in the env var.
-    # Example: jdbc:postgresql://HOST/DBNAME?sslmode=require&user=USER&password=PASS
-    url: ${DATABASE_URL}
+    # SPRING_DATASOURCE_URL takes priority — set this on Railway with the jdbc: prefix.
+    # Falls back to DATABASE_URL for local dev (also needs jdbc: prefix).
+    # Railway PostgreSQL plugin sets DATABASE_URL as "postgresql://..." — override it:
+    #   Set SPRING_DATASOURCE_URL=jdbc:postgresql://HOST/DB?sslmode=require&user=U&password=P
+    url: ${SPRING_DATASOURCE_URL:${DATABASE_URL}}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:5}
+      minimum-idle: 1
       connection-timeout: 30000
       # Neon PostgreSQL closes idle connections after ~5 minutes.
       # max-lifetime must be shorter than that so HikariCP retires connections
@@ -59,10 +60,13 @@ spring:
       fail-on-unknown-properties: false
 
 server:
-  port: ${PORT:4001}    # Community service runs on 4001
+  port: ${PORT:4001}
   error:
-    include-message: on-param      # Shows message when ?message param present; safe middle ground
+    include-message: on-param
     include-stacktrace: never
+
+# Disable async timeout so SSE (EventSource) connections stay open indefinitely
+spring.mvc.async.request-timeout: -1
 
 management:
   endpoints:
@@ -83,6 +87,10 @@ app:
   ingest:
     api-key: ${INGEST_API_KEY:change-me-in-production}
   cors:
+    # To test the website from another device on your LAN (e.g. phone browser, tablet),
+    # override CORS_ALLOWED_ORIGINS to also include your LAN URL, e.g.:
+    #   CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3002,http://192.168.1.42:3002
+    # Native mobile clients (flood-mobile-app) are not browser-CORS constrained.
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3002}
   environment: ${NODE_ENV:development}
   email:
@@ -95,3 +103,12 @@ app:
     seed-password: ${ADMIN_SEED_PASSWORD:}
     seed-first-name: ${ADMIN_SEED_FIRST_NAME:Admin}
     seed-last-name: ${ADMIN_SEED_LAST_NAME:User}
+  mqtt:
+    # Set MQTT_ENABLED=true in .env once Mosquitto is running
+    enabled: ${MQTT_ENABLED:false}
+    broker-url: ${MQTT_BROKER_URL:tcp://localhost:1883}
+    username: ${MQTT_USERNAME:flood-service}
+    password: ${MQTT_PASSWORD:change-me}
+    client-id: ${MQTT_CLIENT_ID:flood-service}
+    # Minimum ms between two accepted readings for the same nodeId (rate limiter)
+    min-interval-ms: ${MQTT_MIN_INTERVAL_MS:500}

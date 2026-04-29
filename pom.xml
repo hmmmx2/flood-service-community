@@ -102,6 +102,17 @@
       <version>4.0.0</version>
     </dependency>
 
+    <!-- ── MQTT (Spring Integration + Eclipse Paho 3.x) ────────── -->
+    <dependency>
+      <groupId>org.springframework.integration</groupId>
+      <artifactId>spring-integration-mqtt</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.paho</groupId>
+      <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
+      <version>1.2.5</version>
+    </dependency>
+
     <!-- ── Actuator ──────────────────────────────────────────────── -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

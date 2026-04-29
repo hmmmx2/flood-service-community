@@ -5,6 +5,7 @@ import com.fyp.floodmonitoring.entity.Node;
 import com.fyp.floodmonitoring.repository.NodeRepository;
 import com.fyp.floodmonitoring.util.GeoUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +15,7 @@ import java.util.List;
 /**
  * Returns all IoT sensor nodes formatted as {@link SensorNodeDto} for the map view.
  * Distance is calculated from Kuching city centre using the Haversine formula.
+ * Result is cached under "sensors"; IngestService evicts it on every level change.
  */
 @Service
 @RequiredArgsConstructor
@@ -21,6 +23,7 @@ public class SensorService {
 
     private final NodeRepository nodeRepository;
 
+    @Cacheable(value = "sensors", unless = "#result.isEmpty()")
     @Transactional(readOnly = true)
     public List<SensorNodeDto> getAllSensors() {
         return nodeRepository.findAllByOrderByNodeIdAsc()
@@ -29,7 +32,8 @@ public class SensorService {
                 .toList();
     }
 
-    private SensorNodeDto toDto(Node n) {
+    /** Public so IngestService can build a DTO after updating a node for SSE broadcast. */
+    public SensorNodeDto toDto(Node n) {
         double dist = GeoUtils.haversineKm(
                 GeoUtils.KUCHING_LAT, GeoUtils.KUCHING_LON,
                 n.getLatitude(), n.getLongitude());
@@ -56,9 +60,9 @@ public class SensorService {
     }
 
     private String resolveStatus(int level, boolean isDead) {
-        if (isDead)      return "inactive";
-        if (level >= 3)  return "warning";   // critical is also shown as warning-level alert
-        if (level >= 2)  return "warning";
+        if (isDead)     return "inactive";
+        if (level >= 3) return "critical";
+        if (level >= 2) return "warning";
         return "active";
     }
 

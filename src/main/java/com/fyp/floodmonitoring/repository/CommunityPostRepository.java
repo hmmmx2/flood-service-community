@@ -47,8 +47,10 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, UU
     Page<CommunityPost> searchByGroupAndLikesDesc(
             @Param("groupId") UUID groupId, @Param("q") String query, Pageable pageable);
 
+    /** Never store a negative like count (drift between counter and like rows). */
     @Modifying(clearAutomatically = true)
-    @Query("UPDATE CommunityPost p SET p.likesCount = p.likesCount + :delta WHERE p.id = :id")
+    @Query(value = "UPDATE community_posts SET likes_count = GREATEST(0, likes_count + :delta) WHERE id = :id",
+            nativeQuery = true)
     void adjustLikes(@Param("id") UUID id, @Param("delta") int delta);
 
     @Modifying(clearAutomatically = true)

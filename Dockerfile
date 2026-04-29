@@ -22,18 +22,21 @@ WORKDIR /app
 USER root
 RUN apk add --no-cache curl
 
-ARG SERVER_PORT=4001
-ENV PORT=${SERVER_PORT}
-
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 COPY --from=builder /app/target/*.jar app.jar
 
+# Container-aware JVM: uses 75% of the cgroup memory limit instead of host RAM.
+# -Djava.security.egd speeds up startup by using /dev/urandom for token generation.
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -Djava.net.preferIPv4Stack=true"
+
 USER appuser
 
-EXPOSE ${SERVER_PORT}
+# Railway injects PORT at runtime; expose 8080 as a documentation hint only.
+EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-  CMD curl -fsS "http://127.0.0.1:${PORT}/actuator/health" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
+  CMD curl -fsS "http://127.0.0.1:${PORT:-8080}/actuator/health" || exit 1
 
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar -Dserver.port=${PORT} app.jar"]
+# PORT is injected by Railway at runtime; application.yml reads server.port: ${PORT:4001}
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
