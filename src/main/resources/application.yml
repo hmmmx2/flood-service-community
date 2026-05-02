@@ -9,7 +9,7 @@ spring:
     # Falls back to DATABASE_URL for local dev (also needs jdbc: prefix).
     # Railway PostgreSQL plugin sets DATABASE_URL as "postgresql://..." — override it:
     #   Set SPRING_DATASOURCE_URL=jdbc:postgresql://HOST/DB?sslmode=require&user=U&password=P
-    url: ${SPRING_DATASOURCE_URL:${DATABASE_URL}}
+    url: ${SPRING_DATASOURCE_URL:${DATABASE_URL:MISSING_DB_URL_SET_SPRING_DATASOURCE_URL_IN_RAILWAY}}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:5}
@@ -76,6 +76,13 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
 
 # ── Application-specific properties ──────────────────────────────────────────
 app:

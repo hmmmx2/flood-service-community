@@ -3,6 +3,7 @@ package com.fyp.floodmonitoring.service;
 import com.fyp.floodmonitoring.dto.request.*;
 import com.fyp.floodmonitoring.dto.response.*;
 import com.fyp.floodmonitoring.entity.*;
+import com.fyp.floodmonitoring.enums.Role;
 import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.repository.*;
 import com.fyp.floodmonitoring.security.JwtTokenProvider;
@@ -61,7 +62,7 @@ public class AuthService {
                 .lastName(req.lastName().trim())
                 .email(email)
                 .passwordHash(passwordEncoder.encode(req.password()))
-                .role("customer")
+                .role(Role.CUSTOMER.getPersistenceValue())
                 .build();
         user = userRepository.save(user);
 
@@ -236,7 +237,7 @@ public class AuthService {
                 user.getLastName(),
                 displayName,
                 user.getAvatarUrl(),
-                user.getRole());
+                Role.fromString(user.getRole()).getDisplayLabel());
 
         return new LoginResponseDto(session, userDto);
     }

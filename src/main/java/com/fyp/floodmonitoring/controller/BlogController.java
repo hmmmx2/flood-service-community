@@ -52,34 +52,34 @@ public class BlogController {
     // ── Admin ─────────────────────────────────────────────────────────────────
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','NGO_VOLUNTEER')")
     public ResponseEntity<BlogDto> createBlog(@Valid @RequestBody CreateBlogRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(blogService.createBlog(req));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','NGO_VOLUNTEER')")
     public ResponseEntity<BlogDto> updateBlog(@PathVariable UUID id,
                                               @Valid @RequestBody UpdateBlogRequest req) {
         return ResponseEntity.ok(blogService.updateBlog(id, req));
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','NGO_VOLUNTEER')")
     public ResponseEntity<BlogDto> patchBlog(@PathVariable UUID id,
                                              @Valid @RequestBody UpdateBlogRequest req) {
         return ResponseEntity.ok(blogService.updateBlog(id, req));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','NGO_VOLUNTEER')")
     public ResponseEntity<Void> deleteBlog(@PathVariable UUID id) {
         blogService.deleteBlog(id);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/featured")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','NGO_VOLUNTEER')")
     public ResponseEntity<BlogDto> toggleFeatured(@PathVariable UUID id) {
         return ResponseEntity.ok(blogService.toggleFeatured(id));
     }

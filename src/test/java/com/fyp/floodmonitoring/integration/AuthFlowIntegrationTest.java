@@ -197,7 +197,7 @@ class AuthFlowIntegrationTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().session().accessToken()).isNotBlank();
-            assertThat(response.getBody().user().role()).isEqualTo("customer");
+            assertThat(response.getBody().user().role()).isEqualTo("Customer");
         }
 
         @Test

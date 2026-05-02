@@ -15,7 +15,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/admin")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+@PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','NGO_VOLUNTEER')")
 public class AdminCommunityController {
 
     private final CommunityService communityService;

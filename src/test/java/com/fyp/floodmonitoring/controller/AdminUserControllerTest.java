@@ -53,11 +53,11 @@ class AdminUserControllerTest {
     void setUp() {
         sampleAdmin = new AdminUserDto(
             "admin-uuid-001", "Admin User", "admin@example.com",
-            "admin", "active", "2024-01-01T00:00:00Z", "2025-01-01T10:00:00Z"
+            "Admin", "active", "2024-01-01T00:00:00Z", "2025-01-01T10:00:00Z"
         );
         sampleCustomer = new AdminUserDto(
             "user-uuid-001", "John Doe", "john@example.com",
-            "customer", "active", "2024-02-01T00:00:00Z", "2025-01-01T09:00:00Z"
+            "Customer", "active", "2024-02-01T00:00:00Z", "2025-01-01T09:00:00Z"
         );
     }
 
@@ -75,9 +75,9 @@ class AdminUserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].email").value("admin@example.com"))
-                .andExpect(jsonPath("$[0].role").value("admin"))
+                .andExpect(jsonPath("$[0].role").value("Admin"))
                 .andExpect(jsonPath("$[1].email").value("john@example.com"))
-                .andExpect(jsonPath("$[1].role").value("customer"));
+                .andExpect(jsonPath("$[1].role").value("Customer"));
         }
 
         @Test
@@ -116,7 +116,7 @@ class AdminUserControllerTest {
                     .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("john@example.com"))
-                .andExpect(jsonPath("$.role").value("customer"));
+                .andExpect(jsonPath("$.role").value("Customer"));
         }
 
         @Test
@@ -146,7 +146,7 @@ class AdminUserControllerTest {
             UUID userId = UUID.randomUUID();
             AdminUserDto updated = new AdminUserDto(
                 userId.toString(), "John Updated", "john@example.com",
-                "admin", "active", "2024-02-01T00:00:00Z", "2025-01-01T09:00:00Z"
+                "Admin", "active", "2024-02-01T00:00:00Z", "2025-01-01T09:00:00Z"
             );
             when(adminUserService.updateUser(eq(userId), any())).thenReturn(updated);
 
@@ -157,7 +157,7 @@ class AdminUserControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.role").value("admin"));
+                .andExpect(jsonPath("$.role").value("Admin"));
         }
     }
 

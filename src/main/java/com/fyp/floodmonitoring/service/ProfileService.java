@@ -3,6 +3,7 @@ package com.fyp.floodmonitoring.service;
 import com.fyp.floodmonitoring.dto.request.UpdateProfileRequest;
 import com.fyp.floodmonitoring.dto.response.UserProfileDto;
 import com.fyp.floodmonitoring.entity.User;
+import com.fyp.floodmonitoring.enums.Role;
 import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -64,7 +65,7 @@ public class ProfileService {
                 u.getFirstName(),
                 u.getLastName(),
                 displayName,
-                u.getRole(),
+                Role.fromString(u.getRole()).getDisplayLabel(),
                 u.getPhone(),
                 u.getLocationLabel(),
                 u.getAvatarUrl());

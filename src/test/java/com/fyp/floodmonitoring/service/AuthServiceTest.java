@@ -131,7 +131,7 @@ class AuthServiceTest {
             assertThat(response).isNotNull();
             assertThat(response.session().accessToken()).isEqualTo("mock-access-token");
             assertThat(response.user().email()).isEqualTo("john@example.com");
-            assertThat(response.user().role()).isEqualTo("customer");
+            assertThat(response.user().role()).isEqualTo("Customer");
         }
 
         @Test

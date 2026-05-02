@@ -66,7 +66,7 @@ public class SecurityConfig {
                     "/community/posts/**",
                     "/community/groups",
                     "/community/groups/**").permitAll()  // public read
-                .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/actuator/health/**").permitAll()
                 .requestMatchers("/sse/**").permitAll()   // SSE — public sensor data stream
                 .anyRequest().authenticated()
             )

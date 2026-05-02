@@ -76,13 +76,13 @@ class JwtTokenProviderTest {
         }
 
         @Test
-        @DisplayName("extracting role from access token returns correct role")
+        @DisplayName("extracting role from access token returns canonical role name")
         void getRoleFromAccessToken_ReturnsCorrectRole() {
             UUID userId = UUID.randomUUID();
             String token = tokenProvider.createAccessToken(userId, "admin@example.com", "admin");
 
             String role = tokenProvider.getRoleFromAccessToken(token);
-            assertThat(role).isEqualTo("admin");
+            assertThat(role).isEqualTo("ADMIN");
         }
 
         @Test

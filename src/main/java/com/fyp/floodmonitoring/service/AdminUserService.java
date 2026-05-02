@@ -4,6 +4,7 @@ import com.fyp.floodmonitoring.dto.request.CreateAdminUserRequest;
 import com.fyp.floodmonitoring.dto.request.UpdateAdminUserRequest;
 import com.fyp.floodmonitoring.dto.response.AdminUserDto;
 import com.fyp.floodmonitoring.entity.User;
+import com.fyp.floodmonitoring.enums.Role;
 import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.repository.RefreshTokenRepository;
 import com.fyp.floodmonitoring.repository.UserFavouriteNodeRepository;
@@ -51,7 +52,7 @@ public class AdminUserService {
             throw AppException.badRequest("WEAK_PASSWORD", "Password must be at least 8 characters");
         }
 
-        String role = (req.role() != null && req.role().equalsIgnoreCase("admin")) ? "admin" : "customer";
+        String role = Role.fromString(req.role()).getPersistenceValue();
 
         User user = User.builder()
                 .firstName(req.firstName() != null ? req.firstName().trim() : "")
@@ -80,8 +81,7 @@ public class AdminUserService {
             user.setLastName(req.lastName().trim());
         }
         if (req.role() != null && !req.role().isBlank()) {
-            String role = req.role().equalsIgnoreCase("admin") ? "admin" : "customer";
-            user.setRole(role);
+            user.setRole(Role.fromString(req.role()).getPersistenceValue());
         }
 
         user = userRepository.save(user);
@@ -110,16 +110,11 @@ public class AdminUserService {
                 u.getId().toString(),
                 displayName,
                 u.getEmail(),
-                capitalize(u.getRole()),
+                Role.fromString(u.getRole()).getDisplayLabel(),
                 "active",
                 u.getCreatedAt() != null ? u.getCreatedAt().toString() : null,
                 u.getLastLogin() != null ? u.getLastLogin().toString() : null
         );
-    }
-
-    private String capitalize(String s) {
-        if (s == null || s.isEmpty()) return s;
-        return s.substring(0, 1).toUpperCase() + s.substring(1).toLowerCase();
     }
 
     private void seedDefaultSettings(UUID userId) {

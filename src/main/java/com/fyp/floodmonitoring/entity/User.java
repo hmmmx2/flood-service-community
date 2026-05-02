@@ -34,8 +34,8 @@ public class User {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    /** "customer" or "admin" */
-    @Column(nullable = false, length = 20)
+    /** Lowercase persistence value: {@code admin}, {@code operations_manager}, … */
+    @Column(nullable = false, length = 32)
     private String role;
 
     @Column(length = 50)

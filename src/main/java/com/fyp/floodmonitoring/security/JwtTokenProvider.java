@@ -3,6 +3,7 @@ package com.fyp.floodmonitoring.security;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import com.fyp.floodmonitoring.enums.Role;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -36,11 +37,12 @@ public class JwtTokenProvider {
 
     // ── Token creation ────────────────────────────────────────────────────────
 
-    public String createAccessToken(UUID userId, String email, String role) {
+    public String createAccessToken(UUID userId, String email, String persistedRole) {
+        String roleClaim = Role.fromString(persistedRole).name();
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("email", email)
-                .claim("role", role)
+                .claim("role", roleClaim)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + accessTokenExpiryMs))
                 .signWith(getSigningKey(jwtSecret))

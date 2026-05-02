@@ -82,7 +82,7 @@ class ProfileControllerTest {
                     .andExpect(jsonPath("$.firstName").value("John"))
                     .andExpect(jsonPath("$.lastName").value("Doe"))
                     .andExpect(jsonPath("$.displayName").value("John Doe"))
-                    .andExpect(jsonPath("$.role").value("customer"))
+                    .andExpect(jsonPath("$.role").value("Customer"))
                     .andExpect(jsonPath("$.phone").value("+60111234567"))
                     .andExpect(jsonPath("$.locationLabel").value("Kuching, Sarawak"));
         }
@@ -118,7 +118,7 @@ class ProfileControllerTest {
         void updateProfile_ValidRequest_Returns200() throws Exception {
             UserProfileDto updated = new UserProfileDto(
                     USER_ID, "john.doe@test.com", "Jane", "Doe",
-                    "Jane Doe", "customer", "+60199999999", "Kuching", null
+                    "Jane Doe", "Customer", "+60199999999", "Kuching", null
             );
             when(profileService.updateProfile(eq(UUID.fromString(USER_ID)), any(UpdateProfileRequest.class)))
                     .thenReturn(updated);
@@ -205,7 +205,7 @@ class ProfileControllerTest {
         void updateProfile_PartialUpdate_Returns200() throws Exception {
             UserProfileDto partiallyUpdated = new UserProfileDto(
                     USER_ID, "john.doe@test.com", "John", "Doe",
-                    "John Doe", "customer", null, "Kuching, Sarawak", null
+                    "John Doe", "Customer", null, "Kuching, Sarawak", null
             );
             when(profileService.updateProfile(any(), any())).thenReturn(partiallyUpdated);
 

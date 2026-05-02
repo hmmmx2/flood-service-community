@@ -58,7 +58,7 @@ class AuthControllerTest {
             "mock-access-token", "mock-refresh-token", "2099-01-01T00:00:00Z"
         );
         UserSummaryDto user = new UserSummaryDto(
-            "user-uuid", "test@example.com", "Test", "User", "Test User", null, "customer"
+            "user-uuid", "test@example.com", "Test", "User", "Test User", null, "Customer"
         );
         mockLoginResponse = new LoginResponseDto(session, user);
     }
@@ -143,7 +143,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.session.accessToken").exists())
                 .andExpect(jsonPath("$.session.refreshToken").exists())
                 .andExpect(jsonPath("$.user.email").value("test@example.com"))
-                .andExpect(jsonPath("$.user.role").value("customer"));
+                .andExpect(jsonPath("$.user.role").value("Customer"));
         }
 
         @Test

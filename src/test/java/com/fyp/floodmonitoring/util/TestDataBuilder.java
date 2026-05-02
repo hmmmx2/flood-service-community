@@ -66,7 +66,7 @@ public final class TestDataBuilder {
                 "John",
                 "Doe",
                 "John Doe",
-                "customer",
+                "Customer",
                 "+60111234567",
                 "Kuching, Sarawak",
                 null

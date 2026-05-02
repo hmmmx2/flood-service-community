@@ -1,6 +1,7 @@
 package com.fyp.floodmonitoring.security;
 
 import com.fyp.floodmonitoring.entity.User;
+import com.fyp.floodmonitoring.enums.Role;
 import com.fyp.floodmonitoring.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -33,7 +34,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .username(user.getId().toString())
                 .password(user.getPasswordHash())
                 .authorities(Collections.singletonList(
-                        new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase())))
+                        new SimpleGrantedAuthority("ROLE_" + Role.fromString(user.getRole()).name())))
                 .build();
     }
 }
