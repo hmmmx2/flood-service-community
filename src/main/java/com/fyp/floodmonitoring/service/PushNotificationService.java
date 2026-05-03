@@ -1,5 +1,7 @@
 package com.fyp.floodmonitoring.service;
 
+import com.fyp.floodmonitoring.entity.FloodAlert;
+import com.fyp.floodmonitoring.entity.FloodSeverity;
 import com.fyp.floodmonitoring.entity.User;
 import com.fyp.floodmonitoring.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -89,6 +92,91 @@ public class PushNotificationService {
 
         sendInBatches(messages);
         log.info("[Push] Sent {} notifications for nodeId={} level={}", messages.size(), nodeId, newLevel);
+    }
+
+    /**
+     * Sends flood threshold push notifications to eligible users.
+     * Payload matches the mobile FloodAlertPayload TypeScript interface exactly,
+     * so the mobile FloodAlertBanner activates correctly on receipt.
+     *
+     * Channel routing:
+     *   WATCH    → floodwatch-alerts  (normal priority)
+     *   WARNING  → flood_emergency    (bypasses DnD)
+     *   CRITICAL → flood_emergency    (bypasses DnD, sticky)
+     */
+    @Async
+    public void notifyFloodThreshold(FloodAlert alert) {
+        List<String> tokens = new ArrayList<>(
+                userRepository.findUsersWithPushTokenAndSetting("pushAllWarnings")
+                        .stream()
+                        .map(User::getPushToken)
+                        .filter(t -> t != null && t.startsWith("ExponentPushToken"))
+                        .toList()
+        );
+
+        // CRITICAL also notifies "pushCriticalOnly" subscribers
+        if (alert.getSeverity() == FloodSeverity.CRITICAL) {
+            userRepository.findUsersWithPushTokenAndSetting("pushCriticalOnly")
+                    .stream()
+                    .map(User::getPushToken)
+                    .filter(t -> t != null && t.startsWith("ExponentPushToken"))
+                    .forEach(tokens::add);
+        }
+
+        if (tokens.isEmpty()) {
+            log.debug("[Push] No eligible tokens for flood threshold nodeId={} severity={}",
+                    alert.getNodeId(), alert.getSeverity());
+            return;
+        }
+
+        double waterLevelFeet = alert.getWaterLevelMeters() * 3.28084;
+        boolean isCritical    = alert.getSeverity() == FloodSeverity.CRITICAL;
+        boolean isWatch       = alert.getSeverity() == FloodSeverity.WATCH;
+        String  channelId     = isWatch ? "floodwatch-alerts" : "flood_emergency";
+        String  priority      = isWatch ? "normal" : "high";
+
+        String title = switch (alert.getSeverity()) {
+            case WATCH    -> "⚠️ Flood Watch — " + alert.getNodeName();
+            case WARNING  -> "🚨 Flood Warning — " + alert.getNodeName();
+            case CRITICAL -> "🆘 CRITICAL FLOOD — " + alert.getNodeName();
+        };
+        String body = String.format("Water level: %.1f ft.%s",
+                waterLevelFeet,
+                alert.getZone() != null ? " Zone: " + alert.getZone() : "");
+
+        // Build payload matching mobile FloodAlertPayload interface
+        Map<String, Object> data = Map.of(
+                "type",           "flood_alert",
+                "nodeId",         alert.getNodeId(),
+                "nodeName",       alert.getNodeName(),
+                "waterLevelFeet", waterLevelFeet,
+                "severity",       alert.getSeverity().name(),
+                "zone",           alert.getZone() != null ? alert.getZone() : "",
+                "timestamp",      alert.getCreatedAt() != null ? alert.getCreatedAt().toString() : ""
+        );
+
+        List<Map<String, Object>> messages = tokens.stream()
+                .distinct()
+                .map(token -> {
+                    Map<String, Object> msg = new HashMap<>();
+                    msg.put("to",        token);
+                    msg.put("title",     title);
+                    msg.put("body",      body);
+                    msg.put("sound",     isCritical ? "flood_alarm.wav" : "default");
+                    msg.put("priority",  priority);
+                    msg.put("channelId", channelId);
+                    msg.put("data",      data);
+                    if (isCritical) {
+                        msg.put("sticky", true);
+                        msg.put("ttl",    86400);  // 24 hours
+                    }
+                    return msg;
+                })
+                .toList();
+
+        sendInBatches(messages);
+        log.info("[Push] Flood threshold: {} notifications sent nodeId={} severity={}",
+                messages.size(), alert.getNodeId(), alert.getSeverity());
     }
 
     /**

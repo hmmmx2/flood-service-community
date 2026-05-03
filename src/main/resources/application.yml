@@ -119,3 +119,7 @@ app:
     client-id: ${MQTT_CLIENT_ID:flood-service}
     # Minimum ms between two accepted readings for the same nodeId (rate limiter)
     min-interval-ms: ${MQTT_MIN_INTERVAL_MS:500}
+  flood:
+    # Suppress duplicate (nodeId, severity) alerts within this window.
+    # Override via FLOOD_DEDUP_WINDOW_MINUTES env var on Railway for testing.
+    dedup-window-minutes: ${FLOOD_DEDUP_WINDOW_MINUTES:30}

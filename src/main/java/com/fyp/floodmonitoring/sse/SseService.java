@@ -2,6 +2,7 @@ package com.fyp.floodmonitoring.sse;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fyp.floodmonitoring.dto.response.FloodAlertDto;
 import com.fyp.floodmonitoring.dto.response.SensorNodeDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -89,6 +90,41 @@ public class SseService {
         }
 
         log.debug("[SSE] Broadcast nodeId={} to {} clients", node.nodeId(), emitters.size());
+    }
+
+    /**
+     * Broadcasts a flood alert to all connected SSE clients.
+     * Event name "flood-alert" — mobile community website listens for this
+     * to show an in-browser warning banner.
+     */
+    public void broadcastFloodAlert(FloodAlertDto alert) {
+        if (emitters.isEmpty()) return;
+
+        String json;
+        try {
+            json = objectMapper.writeValueAsString(alert);
+        } catch (JsonProcessingException e) {
+            log.error("[SSE] Serialization error for flood alert nodeId={}: {}", alert.nodeId(), e.getMessage());
+            return;
+        }
+
+        List<String> deadIds = new ArrayList<>();
+        emitters.forEach((id, emitter) -> {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name("flood-alert")
+                        .data(json, MediaType.APPLICATION_JSON));
+            } catch (Exception e) {
+                deadIds.add(id);
+            }
+        });
+
+        if (!deadIds.isEmpty()) {
+            deadIds.forEach(emitters::remove);
+        }
+
+        log.info("[SSE] Flood alert broadcast nodeId={} severity={} to {} clients",
+                alert.nodeId(), alert.severity(), emitters.size());
     }
 
     // ── Heartbeat (every 15s) ─────────────────────────────────────────────────

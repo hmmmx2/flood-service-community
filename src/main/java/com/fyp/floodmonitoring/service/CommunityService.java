@@ -1,13 +1,7 @@
 package com.fyp.floodmonitoring.service;
 
-import com.fyp.floodmonitoring.dto.request.CreateCommunityCommentRequest;
-import com.fyp.floodmonitoring.dto.request.CreateCommunityPostRequest;
-import com.fyp.floodmonitoring.dto.request.CreateGroupRequest;
-import com.fyp.floodmonitoring.dto.request.UpdatePostRequest;
-import com.fyp.floodmonitoring.dto.response.CommunityCommentDto;
-import com.fyp.floodmonitoring.dto.response.CommunityGroupDto;
-import com.fyp.floodmonitoring.dto.response.CommunityPostDto;
-import com.fyp.floodmonitoring.dto.response.LikeToggleDto;
+import com.fyp.floodmonitoring.dto.request.*;
+import com.fyp.floodmonitoring.dto.response.*;
 import com.fyp.floodmonitoring.entity.*;
 import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.repository.*;
@@ -17,10 +11,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.text.Normalizer;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +21,7 @@ public class CommunityService {
 
     private final CommunityPostRepository postRepo;
     private final CommunityCommentRepository commentRepo;
+    private final CommunityCommentVoteRepository voteRepo;
     private final CommunityPostLikeRepository likeRepo;
     private final CommunityGroupRepository groupRepo;
     private final CommunityGroupMemberRepository memberRepo;
@@ -99,8 +93,8 @@ public class CommunityService {
     @Transactional(readOnly = true)
     public Page<CommunityPostDto> listPosts(int page, int size, String sort, String groupSlug, String search, UUID viewerId) {
         PageRequest pageable = PageRequest.of(page, Math.min(size, 50));
-        boolean isTop     = "top".equalsIgnoreCase(sort);
-        boolean hasGroup  = groupSlug != null && !groupSlug.isBlank();
+        boolean isTop = "top".equalsIgnoreCase(sort);
+        boolean hasGroup = groupSlug != null && !groupSlug.isBlank();
         boolean hasSearch = search != null && !search.isBlank();
         Page<CommunityPost> posts;
 
@@ -138,9 +132,60 @@ public class CommunityService {
         CommunityPost post = postRepo.findById(postId)
                 .orElseThrow(() -> AppException.notFound("Post not found"));
         boolean liked = viewerId != null && likeRepo.existsByPostIdAndUserId(postId, viewerId);
-        List<CommunityCommentDto> comments = commentRepo.findByPostIdOrderByCreatedAtAsc(postId)
-                .stream().map(this::toCommentDto).toList();
-        return toDto(post, liked, comments);
+        return toDto(post, liked, null);
+    }
+
+    @Transactional(readOnly = true)
+    public CommunityCommentsPageDto listComments(UUID postId, UUID viewerId, String sort, int page, int size) {
+        if (!postRepo.existsById(postId)) {
+            throw AppException.notFound("Post not found");
+        }
+        String safeSort = switch (sort != null ? sort.toLowerCase() : "new") {
+            case "top", "old" -> sort.toLowerCase();
+            default -> "new";
+        };
+        int safeSize = Math.max(1, Math.min(size, 50));
+        List<CommunityComment> all = commentRepo.findByPost_IdOrderByCreatedAtAsc(postId);
+        List<CommunityComment> roots = all.stream().filter(c -> c.getParent() == null).toList();
+
+        List<CommunityComment> sortedRoots = new ArrayList<>(roots);
+        Comparator<CommunityComment> cmp = switch (safeSort) {
+            case "top" -> Comparator.comparingInt(CommunityComment::getScore).reversed()
+                    .thenComparing(CommunityComment::getCreatedAt);
+            case "old" -> Comparator.comparing(CommunityComment::getCreatedAt);
+            default -> Comparator.comparing(CommunityComment::getCreatedAt).reversed();
+        };
+        sortedRoots.sort(cmp);
+
+        int total = sortedRoots.size();
+        int from = Math.min(page * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+        List<CommunityComment> pageRoots = sortedRoots.subList(from, to);
+
+        Map<UUID, List<UUID>> byParent = new HashMap<>();
+        for (CommunityComment c : all) {
+            if (c.getParent() != null) {
+                byParent.computeIfAbsent(c.getParent().getId(), k -> new ArrayList<>()).add(c.getId());
+            }
+        }
+
+        Set<UUID> visible = new LinkedHashSet<>();
+        for (CommunityComment root : pageRoots) {
+            visible.add(root.getId());
+            collectDescendants(root.getId(), byParent, visible);
+        }
+
+        List<CommunityComment> slice = all.stream().filter(c -> visible.contains(c.getId())).toList();
+
+        Map<UUID, Integer> replyCountMap = directReplyCounts(all);
+        Map<UUID, Integer> voteMap = loadMyVotes(slice, viewerId);
+
+        List<CommunityCommentDto> dtos = slice.stream()
+                .map(c -> toCommentDto(c, voteMap.getOrDefault(c.getId(), 0),
+                        replyCountMap.getOrDefault(c.getId(), 0)))
+                .toList();
+
+        return new CommunityCommentsPageDto(dtos, total, page, safeSize);
     }
 
     @Transactional
@@ -167,7 +212,7 @@ public class CommunityService {
         if (group != null) {
             groupRepo.adjustPosts(group.getId(), 1);
         }
-        return toDto(post, false, List.of());
+        return toDto(post, false, null);
     }
 
     @Transactional
@@ -179,7 +224,6 @@ public class CommunityService {
         }
         if (req.title() != null && !req.title().isBlank()) post.setTitle(req.title().trim());
         if (req.content() != null && !req.content().isBlank()) post.setContent(req.content().trim());
-        // imageUrl can be set to null explicitly to remove the image
         if (req.imageUrl() != null || req.removeImage()) {
             post.setImageUrl(req.removeImage() ? null : req.imageUrl());
         }
@@ -204,9 +248,6 @@ public class CommunityService {
     public LikeToggleDto toggleLike(UUID postId, UUID userId) {
         CommunityPost post = postRepo.findById(postId)
                 .orElseThrow(() -> AppException.notFound("Post not found"));
-        // Capture the count now — adjustLikes uses a @Modifying JPQL UPDATE which
-        // bypasses the JPA first-level cache, so post.getLikesCount() would be stale
-        // after the call.  Computing from the snapshot avoids the race-window bug.
         int currentCount = Math.max(0, post.getLikesCount());
         boolean alreadyLiked = likeRepo.existsByPostIdAndUserId(postId, userId);
         if (alreadyLiked) {
@@ -220,31 +261,230 @@ public class CommunityService {
         }
     }
 
+    // ── Comments ──────────────────────────────────────────────────────────────
+
     @Transactional
     public CommunityCommentDto addComment(UUID postId, UUID userId, CreateCommunityCommentRequest req) {
         CommunityPost post = postRepo.findById(postId)
                 .orElseThrow(() -> AppException.notFound("Post not found"));
         User author = userRepo.findById(userId)
                 .orElseThrow(() -> AppException.notFound("User not found"));
+
+        CommunityComment parent = null;
+        if (req.parentId() != null && !req.parentId().isBlank()) {
+            UUID parentId = UUID.fromString(req.parentId().trim());
+            parent = commentRepo.findById(parentId)
+                    .orElseThrow(() -> AppException.notFound("Parent comment not found"));
+            if (!parent.getPost().getId().equals(postId)) {
+                throw AppException.badRequest("INVALID_PARENT", "Parent comment belongs to a different post");
+            }
+            if (parent.getDeletedAt() != null) {
+                throw AppException.badRequest("INVALID_PARENT", "Cannot reply to a deleted comment");
+            }
+        }
+
         CommunityComment comment = CommunityComment.builder()
-                .post(post).author(author).content(req.content().trim()).build();
+                .post(post)
+                .author(author)
+                .parent(parent)
+                .content(req.content().trim())
+                .build();
         comment = commentRepo.save(comment);
         postRepo.adjustComments(postId, 1);
-        return toCommentDto(comment);
+
+        int replies = (int) commentRepo.countByParent_Id(comment.getId());
+        return toCommentDto(comment, 0, replies);
     }
 
     @Transactional
-    public void deleteComment(UUID commentId, UUID requesterId, boolean isAdmin) {
-        CommunityComment comment = commentRepo.findById(commentId)
+    public CommunityCommentDto editComment(UUID postId, UUID commentId, UUID userId, UpdateCommunityCommentRequest req) {
+        CommunityComment c = commentRepo.findById(commentId)
                 .orElseThrow(() -> AppException.notFound("Comment not found"));
-        if (!isAdmin && !comment.getAuthor().getId().equals(requesterId)) {
+        if (!c.getPost().getId().equals(postId)) {
+            throw AppException.badRequest("INVALID_POST", "Comment does not belong to this post");
+        }
+        if (c.getDeletedAt() != null) {
+            throw AppException.badRequest("DELETED", "Cannot edit a deleted comment");
+        }
+        if (!c.getAuthor().getId().equals(userId)) {
+            throw AppException.forbidden("You can only edit your own comments");
+        }
+        c.setContent(req.content().trim());
+        c.setUpdatedAt(Instant.now());
+        c = commentRepo.save(c);
+        int replies = (int) commentRepo.countByParent_Id(c.getId());
+        int myVote = voteRepo.findByComment_IdAndUser_Id(c.getId(), userId).map(CommunityCommentVote::getValue).orElse(0);
+        return toCommentDto(c, myVote, replies);
+    }
+
+    @Transactional
+    public void deleteComment(UUID postId, UUID commentId, UUID requesterId, boolean isAdmin) {
+        CommunityComment c = commentRepo.findById(commentId)
+                .orElseThrow(() -> AppException.notFound("Comment not found"));
+        if (!c.getPost().getId().equals(postId)) {
+            throw AppException.badRequest("INVALID_POST", "Comment does not belong to this post");
+        }
+        if (!isAdmin && !c.getAuthor().getId().equals(requesterId)) {
             throw AppException.forbidden("You can only delete your own comments");
         }
-        postRepo.adjustComments(comment.getPost().getId(), -1);
-        commentRepo.delete(comment);
+        User deleter = requesterId != null ? userRepo.findById(requesterId).orElse(null) : null;
+        softOrHardDelete(c, deleter, isAdmin);
+    }
+
+    @Transactional
+    public CommentVoteResponseDto voteComment(UUID postId, UUID commentId, UUID userId, VoteCommentRequest req) {
+        int value = req.value();
+        if (value < -1 || value > 1) {
+            throw AppException.badRequest("INVALID_VOTE", "Vote must be -1, 0, or 1");
+        }
+        CommunityComment c = commentRepo.findById(commentId)
+                .orElseThrow(() -> AppException.notFound("Comment not found"));
+        if (!c.getPost().getId().equals(postId)) {
+            throw AppException.badRequest("INVALID_POST", "Comment does not belong to this post");
+        }
+        if (c.getDeletedAt() != null) {
+            throw AppException.badRequest("DELETED", "Cannot vote on a deleted comment");
+        }
+
+        User voter = userRepo.findById(userId)
+                .orElseThrow(() -> AppException.notFound("User not found"));
+
+        if (value == 0) {
+            voteRepo.deleteByComment_IdAndUser_Id(commentId, userId);
+        } else {
+            CommunityCommentVote existing = voteRepo.findByComment_IdAndUser_Id(commentId, userId).orElse(null);
+            if (existing == null) {
+                voteRepo.save(CommunityCommentVote.builder()
+                        .comment(c)
+                        .user(voter)
+                        .value(value)
+                        .build());
+            } else {
+                existing.setValue(value);
+                voteRepo.save(existing);
+            }
+        }
+
+        int sum = voteRepo.sumValueForComment(commentId);
+        c.setScore(sum);
+        commentRepo.save(c);
+
+        int myVote = voteRepo.findByComment_IdAndUser_Id(commentId, userId).map(CommunityCommentVote::getValue).orElse(0);
+        return new CommentVoteResponseDto(sum, myVote);
+    }
+
+    @Transactional
+    public void moderateComment(UUID commentId, UUID adminId, ModerateCommentRequest req) {
+        String action = req.action().trim().toLowerCase();
+        CommunityComment c = commentRepo.findById(commentId)
+                .orElseThrow(() -> AppException.notFound("Comment not found"));
+        User admin = userRepo.findById(adminId)
+                .orElseThrow(() -> AppException.notFound("User not found"));
+
+        switch (action) {
+            case "hide" -> {
+                if (c.getDeletedAt() == null) {
+                    softHide(c, admin);
+                }
+            }
+            case "restore" -> {
+                if (c.getDeletedAt() == null) return;
+                if (c.getContentBackup() != null) {
+                    c.setContent(c.getContentBackup());
+                    c.setContentBackup(null);
+                }
+                c.setDeletedAt(null);
+                c.setDeletedBy(null);
+                commentRepo.save(c);
+            }
+            case "delete" -> softOrHardDelete(c, admin, true);
+            default -> throw AppException.badRequest("INVALID_ACTION", "Unknown action: " + action);
+        }
+    }
+
+    /** Moderator hide — always preserves row + backup so restore works. */
+    private void softHide(CommunityComment c, User moderator) {
+        if (c.getContent() != null && !c.getContent().isEmpty()) {
+            c.setContentBackup(c.getContent());
+        }
+        c.setContent("");
+        c.setDeletedAt(Instant.now());
+        c.setDeletedBy(moderator);
+        commentRepo.save(c);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AdminCommentListItemDto> adminListComments(int page, int size) {
+        PageRequest pr = PageRequest.of(page, Math.min(size, 50));
+        return commentRepo.findAllByOrderByCreatedAtDesc(pr).map(this::toAdminItem);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void collectDescendants(UUID rootId, Map<UUID, List<UUID>> byParent, Set<UUID> visible) {
+        Deque<UUID> q = new ArrayDeque<>(byParent.getOrDefault(rootId, List.of()));
+        while (!q.isEmpty()) {
+            UUID id = q.poll();
+            if (!visible.add(id)) continue;
+            q.addAll(byParent.getOrDefault(id, List.of()));
+        }
+    }
+
+    private Map<UUID, Integer> directReplyCounts(List<CommunityComment> all) {
+        Map<UUID, Integer> m = new HashMap<>();
+        for (CommunityComment c : all) {
+            if (c.getParent() != null) {
+                m.merge(c.getParent().getId(), 1, Integer::sum);
+            }
+        }
+        return m;
+    }
+
+    private Map<UUID, Integer> loadMyVotes(List<CommunityComment> slice, UUID viewerId) {
+        if (viewerId == null || slice.isEmpty()) return Map.of();
+        List<UUID> ids = slice.stream().map(CommunityComment::getId).toList();
+        return voteRepo.findByComment_IdInAndUser_Id(ids, viewerId).stream()
+                .collect(Collectors.toMap(v -> v.getComment().getId(), CommunityCommentVote::getValue));
+    }
+
+    private void softOrHardDelete(CommunityComment c, User deletedBy, boolean isAdmin) {
+        UUID postId = c.getPost().getId();
+        long children = commentRepo.countByParent_Id(c.getId());
+        if (children > 0) {
+            if (c.getContent() != null && !c.getContent().isEmpty()) {
+                c.setContentBackup(c.getContent());
+            }
+            c.setContent("");
+            c.setDeletedAt(Instant.now());
+            c.setDeletedBy(deletedBy);
+            commentRepo.save(c);
+        } else {
+            voteRepo.deleteByComment_Id(c.getId());
+            commentRepo.delete(c);
+            postRepo.adjustComments(postId, -1);
+        }
+    }
+
+    private AdminCommentListItemDto toAdminItem(CommunityComment c) {
+        CommunityPost p = c.getPost();
+        User a = c.getAuthor();
+        String postTitle = p.getTitle();
+        String parentStr = c.getParent() != null ? c.getParent().getId().toString() : null;
+        boolean deleted = c.getDeletedAt() != null;
+        return new AdminCommentListItemDto(
+                c.getId().toString(),
+                p.getId().toString(),
+                postTitle,
+                parentStr,
+                a.getId().toString(),
+                displayName(a),
+                deleted ? "[deleted]" : c.getContent(),
+                c.getScore(),
+                deleted,
+                c.getCreatedAt(),
+                c.getUpdatedAt()
+        );
+    }
 
     private CommunityGroupDto toGroupDto(CommunityGroup g, boolean joinedByMe) {
         return new CommunityGroupDto(
@@ -256,8 +496,7 @@ public class CommunityService {
 
     private CommunityPostDto toDto(CommunityPost p, boolean likedByMe, List<CommunityCommentDto> comments) {
         User a = p.getAuthor();
-        String name = (a.getFirstName() + " " + a.getLastName()).trim();
-        if (name.isEmpty()) name = a.getEmail();
+        String name = displayName(a);
         CommunityGroup g = p.getGroup();
         return new CommunityPostDto(
                 p.getId().toString(), a.getId().toString(), name, a.getAvatarUrl(),
@@ -270,13 +509,33 @@ public class CommunityService {
         );
     }
 
-    private CommunityCommentDto toCommentDto(CommunityComment c) {
+    private CommunityCommentDto toCommentDto(CommunityComment c, int myVote, int replyCount) {
         User a = c.getAuthor();
+        boolean deleted = c.getDeletedAt() != null;
+        String name = deleted ? "[deleted]" : displayName(a);
+        String content = deleted ? "[deleted]" : c.getContent();
+        String authorId = deleted ? "" : a.getId().toString();
+        String avatar = deleted ? null : a.getAvatarUrl();
+        String parentId = c.getParent() != null ? c.getParent().getId().toString() : null;
+        return new CommunityCommentDto(
+                c.getId().toString(),
+                parentId,
+                authorId,
+                name,
+                avatar,
+                content,
+                c.getScore(),
+                myVote,
+                c.getCreatedAt(),
+                c.getUpdatedAt(),
+                deleted,
+                replyCount
+        );
+    }
+
+    private static String displayName(User a) {
         String name = (a.getFirstName() + " " + a.getLastName()).trim();
         if (name.isEmpty()) name = a.getEmail();
-        return new CommunityCommentDto(
-                c.getId().toString(), a.getId().toString(), name, a.getAvatarUrl(),
-                c.getContent(), c.getCreatedAt()
-        );
+        return name;
     }
 }

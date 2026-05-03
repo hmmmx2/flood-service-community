@@ -1,13 +1,20 @@
 package com.fyp.floodmonitoring.service;
 
+import com.fyp.floodmonitoring.entity.FloodAlert;
+import com.fyp.floodmonitoring.entity.User;
+import com.fyp.floodmonitoring.repository.UserRepository;
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 /**
  * Sends transactional emails via Resend's SMTP relay.
@@ -25,7 +32,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class EmailService {
 
-    private final JavaMailSender mailSender;
+    private final JavaMailSender  mailSender;
+    private final UserRepository  userRepository;
 
     @Value("${app.email.from-address}")
     private String fromAddress;
@@ -90,6 +98,92 @@ public class EmailService {
             // Log but don't rethrow — the reset code is still valid, user can retry
             log.error("[Email] Failed to send reset email to {}: {}", actualRecipient, e.getMessage());
         }
+    }
+
+    /**
+     * Sends a flood alert email to all users who have email_alerts enabled.
+     * Uses HTML for severity-appropriate styling.
+     * Runs asynchronously — called from FloodAlertFanOutListener.
+     */
+    @Async
+    public void sendFloodAlertToAllSubscribers(FloodAlert alert) {
+        List<User> subscribers = userRepository.findUsersWithEmailAlertsEnabled();
+        if (subscribers.isEmpty()) {
+            log.debug("[Email] No email subscribers for flood alert nodeId={}", alert.getNodeId());
+            return;
+        }
+
+        double feet = alert.getWaterLevelMeters() * 3.28084;
+        String subject = switch (alert.getSeverity()) {
+            case WATCH    -> "[FloodWatch] Flood Watch: " + alert.getNodeName();
+            case WARNING  -> "[FloodWatch] ⚠ Flood Warning: " + alert.getNodeName();
+            case CRITICAL -> "[FloodWatch] 🆘 CRITICAL FLOOD ALERT: " + alert.getNodeName();
+        };
+
+        for (User user : subscribers) {
+            String recipient = resolveRecipient(user.getEmail());
+            try {
+                if (resendApiKey == null || resendApiKey.isBlank()) {
+                    log.info("[Email DEV] Flood alert to={} subject='{}'", recipient, subject);
+                    continue;
+                }
+                MimeMessage mime = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(mime, false, "UTF-8");
+                helper.setFrom(fromAddress);
+                helper.setTo(recipient);
+                helper.setSubject(subject);
+                helper.setText(buildFloodAlertHtml(user, alert, feet), true);
+                mailSender.send(mime);
+                log.debug("[Email] Flood alert sent to {} (intended: {})", recipient, user.getEmail());
+            } catch (Exception e) {
+                log.error("[Email] Failed to send flood alert to {}: {}", recipient, e.getMessage());
+            }
+        }
+        log.info("[Email] Flood alert dispatched to {} subscribers nodeId={} severity={}",
+                subscribers.size(), alert.getNodeId(), alert.getSeverity());
+    }
+
+    private String resolveRecipient(String originalEmail) {
+        if ("development".equals(environment) && devRecipient != null && !devRecipient.isBlank()) {
+            return devRecipient;
+        }
+        return originalEmail;
+    }
+
+    private String buildFloodAlertHtml(User user, FloodAlert alert, double feet) {
+        String severityColor = switch (alert.getSeverity()) {
+            case WATCH    -> "#d97706";
+            case WARNING  -> "#dc2626";
+            case CRITICAL -> "#7f1d1d";
+        };
+        String zoneRow = alert.getZone() != null
+                ? "<p>Zone: <strong>" + alert.getZone() + "</strong></p>"
+                : "";
+        return String.format("""
+                <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+                  <div style="background:%s;color:white;padding:16px;border-radius:8px 8px 0 0">
+                    <h2 style="margin:0">Flood Alert — %s</h2>
+                  </div>
+                  <div style="border:2px solid %s;border-top:none;padding:20px;border-radius:0 0 8px 8px">
+                    <p>Hello %s,</p>
+                    <p>Sensor <strong>%s</strong> has reached <strong>%s</strong> level.</p>
+                    <p>Current water level: <strong>%.1f ft (%.1f m)</strong></p>
+                    %s
+                    <p>Please take appropriate action and monitor official channels.</p>
+                    <p><strong>Emergency contacts:</strong> 991 (Police) | 999 (Fire &amp; Rescue) | 994 (Civil Defence)</p>
+                    <hr style="margin:16px 0"/>
+                    <p style="font-size:12px;color:#666">
+                      You received this because you have email alerts enabled in FloodWatch.
+                    </p>
+                  </div>
+                </div>
+                """,
+                severityColor, alert.getSeverity().name(),
+                severityColor,
+                user.getFirstName(),
+                alert.getNodeName(), alert.getSeverity().name(),
+                feet, alert.getWaterLevelMeters(),
+                zoneRow);
     }
 
     /**

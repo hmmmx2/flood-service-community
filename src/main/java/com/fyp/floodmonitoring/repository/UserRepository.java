@@ -34,4 +34,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Modifying
     @Query("UPDATE User u SET u.pushToken = :token WHERE u.id = :id")
     void updatePushToken(UUID id, String token);
+
+    /** Find users who have opted in to email flood alerts. */
+    @Query(value = """
+            SELECT u.* FROM users u
+            INNER JOIN user_settings s ON s.user_id = u.id
+            WHERE s.key = 'emailAlerts'
+              AND s.enabled = true
+            """, nativeQuery = true)
+    java.util.List<User> findUsersWithEmailAlertsEnabled();
 }

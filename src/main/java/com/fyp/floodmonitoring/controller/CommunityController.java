@@ -3,7 +3,10 @@ package com.fyp.floodmonitoring.controller;
 import com.fyp.floodmonitoring.dto.request.CreateCommunityCommentRequest;
 import com.fyp.floodmonitoring.dto.request.CreateCommunityPostRequest;
 import com.fyp.floodmonitoring.dto.request.CreateGroupRequest;
+import com.fyp.floodmonitoring.dto.request.ModerateCommentRequest;
+import com.fyp.floodmonitoring.dto.request.UpdateCommunityCommentRequest;
 import com.fyp.floodmonitoring.dto.request.UpdatePostRequest;
+import com.fyp.floodmonitoring.dto.request.VoteCommentRequest;
 import com.fyp.floodmonitoring.dto.response.*;
 import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.service.CommunityService;
@@ -108,6 +111,16 @@ public class CommunityController {
         return ResponseEntity.ok(communityService.toggleLike(id, requireUserId(auth)));
     }
 
+    @GetMapping("/posts/{id}/comments")
+    public ResponseEntity<CommunityCommentsPageDto> listComments(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "new") String sort,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            Authentication auth) {
+        return ResponseEntity.ok(communityService.listComments(id, resolveUserId(auth), sort, page, size));
+    }
+
     @PostMapping("/posts/{id}/comments")
     public ResponseEntity<CommunityCommentDto> addComment(
             @PathVariable UUID id,
@@ -116,11 +129,29 @@ public class CommunityController {
         return ResponseEntity.ok(communityService.addComment(id, requireUserId(auth), req));
     }
 
+    @PatchMapping("/posts/{postId}/comments/{commentId}")
+    public ResponseEntity<CommunityCommentDto> updateComment(
+            @PathVariable UUID postId,
+            @PathVariable UUID commentId,
+            @Valid @RequestBody UpdateCommunityCommentRequest req,
+            Authentication auth) {
+        return ResponseEntity.ok(communityService.editComment(postId, commentId, requireUserId(auth), req));
+    }
+
     @DeleteMapping("/posts/{postId}/comments/{commentId}")
     public ResponseEntity<Void> deleteComment(
             @PathVariable UUID postId, @PathVariable UUID commentId, Authentication auth) {
-        communityService.deleteComment(commentId, requireUserId(auth), hasRole(auth, "ROLE_ADMIN"));
+        communityService.deleteComment(postId, commentId, requireUserId(auth), hasRole(auth, "ROLE_ADMIN"));
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/posts/{postId}/comments/{commentId}/vote")
+    public ResponseEntity<CommentVoteResponseDto> voteOnComment(
+            @PathVariable UUID postId,
+            @PathVariable UUID commentId,
+            @Valid @RequestBody VoteCommentRequest req,
+            Authentication auth) {
+        return ResponseEntity.ok(communityService.voteComment(postId, commentId, requireUserId(auth), req));
     }
 
     // ══ ADMIN ENDPOINTS ═══════════════════════════════════════════════════════
@@ -154,6 +185,25 @@ public class CommunityController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
     public ResponseEntity<Void> adminDeleteGroup(@PathVariable UUID id) {
         communityService.deleteGroup(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/admin/comments")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+    public ResponseEntity<Page<AdminCommentListItemDto>> adminListComments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        int safeSize = Math.max(1, Math.min(size, 50));
+        return ResponseEntity.ok(communityService.adminListComments(page, safeSize));
+    }
+
+    @PatchMapping("/admin/comments/{commentId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> moderateComment(
+            @PathVariable UUID commentId,
+            @Valid @RequestBody ModerateCommentRequest req,
+            Authentication auth) {
+        communityService.moderateComment(commentId, requireUserId(auth), req);
         return ResponseEntity.noContent().build();
     }
 

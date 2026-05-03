@@ -38,7 +38,7 @@ public class IngestService {
 
     private final NodeRepository          nodeRepository;
     private final EventRepository         eventRepository;
-    private final PushNotificationService pushNotificationService;
+    private final FloodThresholdService   floodThresholdService;
     private final SensorService           sensorService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -85,13 +85,13 @@ public class IngestService {
         node.setIsDead(false);   // node is publishing — it is online
         nodeRepository.save(node);
 
-        // Push notification only when level rises to Warning or Critical
+        // Flood threshold: evaluate for WATCH (≥1), WARNING (≥2), CRITICAL (≥3)
         boolean alertFired = false;
-        if (levelRaised && newLevel >= 2) {
+        if (levelRaised && newLevel >= 1) {
             String area = node.getArea() != null ? node.getArea() : "Kuching";
-            pushNotificationService.notifyLevelChange(req.nodeId(), newLevel, area);
+            floodThresholdService.evaluate(req.nodeId(), node.getName() != null ? node.getName() : req.nodeId(), newLevel, area);
             alertFired = true;
-            log.info("[Ingest] Alert fired: nodeId={} level={}->{}", req.nodeId(), previousLevel, newLevel);
+            log.info("[Ingest] Threshold evaluated: nodeId={} level={}->{}", req.nodeId(), previousLevel, newLevel);
         }
 
         // Publish after @Transactional commit — SseEventBroadcaster listens with AFTER_COMMIT

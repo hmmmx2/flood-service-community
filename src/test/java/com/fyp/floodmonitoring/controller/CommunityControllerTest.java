@@ -73,10 +73,16 @@ class CommunityControllerTest {
 
         sampleComment = new CommunityCommentDto(
             UUID.randomUUID().toString(),
+            null,
             UUID.randomUUID().toString(),
             "Jane Smith", null,
             "Stay safe everyone!",
-            now
+            0,
+            0,
+            now,
+            null,
+            false,
+            0
         );
 
         samplePost = new CommunityPostDto(
@@ -507,7 +513,7 @@ class CommunityControllerTest {
             UUID postId = UUID.fromString(samplePost.id());
             when(communityService.addComment(eq(postId), any(), any())).thenReturn(sampleComment);
 
-            CreateCommunityCommentRequest req = new CreateCommunityCommentRequest("Stay safe everyone!");
+            CreateCommunityCommentRequest req = new CreateCommunityCommentRequest("Stay safe everyone!", null);
 
             mockMvc.perform(post("/community/posts/" + postId + "/comments")
                     .with(csrf())
@@ -553,13 +559,13 @@ class CommunityControllerTest {
         void deleteComment_Author_Returns204() throws Exception {
             UUID postId    = UUID.fromString(samplePost.id());
             UUID commentId = UUID.fromString(sampleComment.id());
-            doNothing().when(communityService).deleteComment(eq(commentId), any(), anyBoolean());
+            doNothing().when(communityService).deleteComment(eq(postId), eq(commentId), any(), anyBoolean());
 
             mockMvc.perform(delete("/community/posts/" + postId + "/comments/" + commentId)
                     .with(csrf()))
                 .andExpect(status().isNoContent());
 
-            verify(communityService).deleteComment(eq(commentId), any(), anyBoolean());
+            verify(communityService).deleteComment(eq(postId), eq(commentId), any(), anyBoolean());
         }
 
         @Test

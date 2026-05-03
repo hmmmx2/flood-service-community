@@ -10,7 +10,13 @@ import com.fyp.floodmonitoring.dto.response.CommunityPostDto;
 import com.fyp.floodmonitoring.dto.response.LikeToggleDto;
 import com.fyp.floodmonitoring.entity.*;
 import com.fyp.floodmonitoring.exception.AppException;
-import com.fyp.floodmonitoring.repository.*;
+import com.fyp.floodmonitoring.repository.CommunityCommentRepository;
+import com.fyp.floodmonitoring.repository.CommunityCommentVoteRepository;
+import com.fyp.floodmonitoring.repository.CommunityGroupMemberRepository;
+import com.fyp.floodmonitoring.repository.CommunityGroupRepository;
+import com.fyp.floodmonitoring.repository.CommunityPostLikeRepository;
+import com.fyp.floodmonitoring.repository.CommunityPostRepository;
+import com.fyp.floodmonitoring.repository.UserRepository;
 import com.fyp.floodmonitoring.util.TestDataBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +47,7 @@ class CommunityServiceTest {
 
     @Mock private CommunityPostRepository         postRepo;
     @Mock private CommunityCommentRepository      commentRepo;
+    @Mock private CommunityCommentVoteRepository   voteRepo;
     @Mock private CommunityPostLikeRepository     likeRepo;
     @Mock private CommunityGroupRepository        groupRepo;
     @Mock private CommunityGroupMemberRepository  memberRepo;
@@ -266,7 +273,7 @@ class CommunityServiceTest {
             when(commentRepo.save(any(CommunityComment.class))).thenReturn(comment);
             doNothing().when(postRepo).adjustComments(any(), eq(1));
 
-            CreateCommunityCommentRequest req = new CreateCommunityCommentRequest("Thanks for the update!");
+            CreateCommunityCommentRequest req = new CreateCommunityCommentRequest("Thanks for the update!", null);
 
             CommunityCommentDto result = communityService.addComment(post.getId(), author.getId(), req);
 
@@ -283,7 +290,7 @@ class CommunityServiceTest {
             UUID unknownPost = UUID.randomUUID();
             when(postRepo.findById(unknownPost)).thenReturn(Optional.empty());
 
-            CreateCommunityCommentRequest req = new CreateCommunityCommentRequest("Comment");
+            CreateCommunityCommentRequest req = new CreateCommunityCommentRequest("Comment", null);
 
             assertThatThrownBy(() -> communityService.addComment(unknownPost, author.getId(), req))
                     .isInstanceOf(AppException.class)
@@ -301,10 +308,12 @@ class CommunityServiceTest {
         @DisplayName("comment author can delete their own comment")
         void deleteComment_Author_CanDelete() {
             when(commentRepo.findById(comment.getId())).thenReturn(Optional.of(comment));
+            when(commentRepo.countByParent_Id(comment.getId())).thenReturn(0L);
+            doNothing().when(voteRepo).deleteByComment_Id(comment.getId());
             doNothing().when(postRepo).adjustComments(any(), eq(-1));
             doNothing().when(commentRepo).delete(comment);
 
-            communityService.deleteComment(comment.getId(), author.getId(), false);
+            communityService.deleteComment(post.getId(), comment.getId(), author.getId(), false);
 
             verify(commentRepo).delete(comment);
         }
@@ -313,10 +322,12 @@ class CommunityServiceTest {
         @DisplayName("admin can delete any comment")
         void deleteComment_Admin_CanDeleteAnyComment() {
             when(commentRepo.findById(comment.getId())).thenReturn(Optional.of(comment));
+            when(commentRepo.countByParent_Id(comment.getId())).thenReturn(0L);
+            doNothing().when(voteRepo).deleteByComment_Id(comment.getId());
             doNothing().when(postRepo).adjustComments(any(), eq(-1));
             doNothing().when(commentRepo).delete(comment);
 
-            communityService.deleteComment(comment.getId(), adminUser.getId(), true);
+            communityService.deleteComment(post.getId(), comment.getId(), adminUser.getId(), true);
 
             verify(commentRepo).delete(comment);
         }
@@ -327,7 +338,7 @@ class CommunityServiceTest {
             UUID intruder = UUID.fromString("77777777-7777-7777-7777-777777777777");
             when(commentRepo.findById(comment.getId())).thenReturn(Optional.of(comment));
 
-            assertThatThrownBy(() -> communityService.deleteComment(comment.getId(), intruder, false))
+            assertThatThrownBy(() -> communityService.deleteComment(post.getId(), comment.getId(), intruder, false))
                     .isInstanceOf(AppException.class)
                     .satisfies(ex -> assertThat(((AppException) ex).getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
 

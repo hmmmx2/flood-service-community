@@ -2,17 +2,16 @@ package com.fyp.floodmonitoring.dto.response;
 
 import java.time.Instant;
 
-public record CommunityCommentDto(
+public record AdminCommentListItemDto(
         String id,
+        String postId,
+        String postTitle,
         String parentId,
         String authorId,
         String authorName,
-        String authorAvatar,
         String content,
         int score,
-        int myVote,
-        Instant createdAt,
-        Instant updatedAt,
         boolean deleted,
-        int replyCount
+        Instant createdAt,
+        Instant updatedAt
 ) {}

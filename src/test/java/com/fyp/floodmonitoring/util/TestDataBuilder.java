@@ -214,11 +214,17 @@ public final class TestDataBuilder {
     public static CommunityCommentDto buildCommentDto() {
         return new CommunityCommentDto(
                 "00000000-0000-0000-0000-000000000040",
+                null,
                 "00000000-0000-0000-0000-000000000001",
                 "John Doe",
                 null,
                 "Thanks for the update!",
-                Instant.parse("2025-06-15T11:00:00Z")
+                0,
+                0,
+                Instant.parse("2025-06-15T11:00:00Z"),
+                null,
+                false,
+                0
         );
     }
 
