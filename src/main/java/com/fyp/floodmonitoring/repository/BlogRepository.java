@@ -4,6 +4,8 @@ import com.fyp.floodmonitoring.entity.Blog;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -16,5 +18,10 @@ public interface BlogRepository extends JpaRepository<Blog, UUID> {
 
     Page<Blog> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
-    Page<Blog> findByCategoryOrderByCreatedAtDesc(String category, Pageable pageable);
+    @Query("SELECT b FROM Blog b WHERE LOWER(TRIM(b.category)) = LOWER(TRIM(:category)) ORDER BY b.createdAt DESC")
+    Page<Blog> findByCategoryNormalized(@Param("category") String category, Pageable pageable);
+
+    @Query(value = "SELECT DISTINCT TRIM(category) FROM blogs WHERE category IS NOT NULL AND TRIM(category) <> '' ORDER BY 1",
+            nativeQuery = true)
+    List<String> findDistinctCategoriesTrimmed();
 }

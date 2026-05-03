@@ -120,15 +120,27 @@ class BlogServiceTest {
         @DisplayName("delegates to category-filtered query when category is provided")
         void getAllBlogs_WithCategory_UsesFilteredQuery() {
             PageRequest pageable = PageRequest.of(0, 20);
-            when(blogRepository.findByCategoryOrderByCreatedAtDesc(eq("Safety Tips"), any()))
+            when(blogRepository.findByCategoryNormalized(eq("Safety Tips"), any()))
                     .thenReturn(new PageImpl<>(List.of(sampleBlog), pageable, 1));
 
             var page = blogService.getAllBlogs(0, 20, "Safety Tips");
 
             assertThat(page.getContent()).hasSize(1);
             assertThat(page.getContent().get(0).category()).isEqualTo("Safety Tips");
-            verify(blogRepository).findByCategoryOrderByCreatedAtDesc(eq("Safety Tips"), any());
+            verify(blogRepository).findByCategoryNormalized(eq("Safety Tips"), any());
             verify(blogRepository, never()).findAllByOrderByCreatedAtDesc(any());
+        }
+
+        @Test
+        @DisplayName("strips category before filtering")
+        void getAllBlogs_CategoryWithSpaces_UsesNormalizedQuery() {
+            PageRequest pageable = PageRequest.of(0, 20);
+            when(blogRepository.findByCategoryNormalized(eq("Safety Tips"), any()))
+                    .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+            blogService.getAllBlogs(0, 20, "  Safety Tips  ");
+
+            verify(blogRepository).findByCategoryNormalized(eq("Safety Tips"), any());
         }
 
         @Test

@@ -18,7 +18,7 @@ import java.util.UUID;
 /**
  * Blog endpoints.
  *
- * Public: GET /blogs/featured, GET /blogs, GET /blogs/{id}
+ * Public: GET /blogs/featured, GET /blogs/categories, GET /blogs, GET /blogs/{id}
  * Admin:  POST /blogs, PUT /blogs/{id}, DELETE /blogs/{id}, PATCH /blogs/{id}/featured
  */
 @RestController
@@ -33,6 +33,11 @@ public class BlogController {
     @GetMapping("/featured")
     public ResponseEntity<List<BlogDto>> getFeaturedBlogs() {
         return ResponseEntity.ok(blogService.getFeaturedBlogs());
+    }
+
+    @GetMapping("/categories")
+    public ResponseEntity<List<String>> getBlogCategories() {
+        return ResponseEntity.ok(blogService.getDistinctBlogCategories());
     }
 
     @GetMapping

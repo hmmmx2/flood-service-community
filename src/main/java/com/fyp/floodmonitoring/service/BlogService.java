@@ -32,10 +32,16 @@ public class BlogService {
     @Transactional(readOnly = true)
     public Page<BlogDto> getAllBlogs(int page, int size, String category) {
         PageRequest pageable = PageRequest.of(page, Math.min(size, 50));
-        Page<Blog> blogs = (category != null && !category.isBlank())
-                ? blogRepository.findByCategoryOrderByCreatedAtDesc(category, pageable)
+        String normalized = category != null ? category.strip() : null;
+        Page<Blog> blogs = (normalized != null && !normalized.isBlank())
+                ? blogRepository.findByCategoryNormalized(normalized, pageable)
                 : blogRepository.findAllByOrderByCreatedAtDesc(pageable);
         return blogs.map(this::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> getDistinctBlogCategories() {
+        return blogRepository.findDistinctCategoriesTrimmed();
     }
 
     @Transactional(readOnly = true)

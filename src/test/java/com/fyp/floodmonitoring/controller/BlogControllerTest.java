@@ -91,6 +91,24 @@ class BlogControllerTest {
         }
     }
 
+    // ── GET /blogs/categories ──────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("GET /blogs/categories")
+    class GetBlogCategories {
+
+        @Test
+        @DisplayName("returns 200 with distinct category strings")
+        void getCategories_Returns200() throws Exception {
+            when(blogService.getDistinctBlogCategories()).thenReturn(List.of("General", "Safety Tips"));
+
+            mockMvc.perform(get("/blogs/categories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0]").value("General"));
+        }
+    }
+
     // ── GET /blogs ─────────────────────────────────────────────────────────────
 
     @Nested
