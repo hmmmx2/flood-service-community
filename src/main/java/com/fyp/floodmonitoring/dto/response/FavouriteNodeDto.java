@@ -8,6 +8,8 @@ import java.util.List;
  */
 public record FavouriteNodeDto(
         String id,
+        /** Business key (same as {@link SensorNodeDto#nodeId()}); required by clients for favourites matching. */
+        String nodeId,
         String name,
         String status,
         String distance,

@@ -90,7 +90,8 @@ public class FavouritesService {
 
         return new FavouriteNodeDto(
                 n.getId().toString(),
-                n.getName(),
+                n.getNodeId(),
+                n.getName() != null ? n.getName() : "Node " + n.getNodeId(),
                 resolveStatus(n.getCurrentLevel(), n.getIsDead()),
                 dist + " km",
                 List.of(n.getLongitude(), n.getLatitude()),

@@ -50,7 +50,7 @@ class FavouritesControllerTest {
     @BeforeEach
     void setUp() {
         sampleFavourite = new FavouriteNodeDto(
-            "node-uuid-001", "Node 102782478", "active", "1.2 km",
+            "node-uuid-001", "102782478", "Node 102782478", "active", "1.2 km",
             List.of(110.3592, 1.5533), "Kuching", "Sungai Sarawak", "Sarawak",
             1, "2025-01-01T10:00:00Z", "2025-01-01T08:00:00Z"
         );
@@ -70,6 +70,7 @@ class FavouritesControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].name").value("Node 102782478"))
+                .andExpect(jsonPath("$[0].nodeId").value("102782478"))
                 .andExpect(jsonPath("$[0].status").value("active"))
                 .andExpect(jsonPath("$[0].favouritedAt").exists());
         }

@@ -5,10 +5,10 @@ import com.fyp.floodmonitoring.dto.response.IngestResponse;
 import com.fyp.floodmonitoring.dto.response.SensorNodeDto;
 import com.fyp.floodmonitoring.entity.Event;
 import com.fyp.floodmonitoring.entity.Node;
-import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.repository.EventRepository;
 import com.fyp.floodmonitoring.repository.NodeRepository;
 import com.fyp.floodmonitoring.sse.SensorUpdateEvent;
+import com.fyp.floodmonitoring.util.GeoUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,11 +25,12 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * Key behaviours:
  *  1. Rate-limits per nodeId — rejects readings arriving faster than minIntervalMs.
- *  2. Only writes an Event row when the flood level actually changes (prevents write amplification).
- *  3. Always updates node.lastUpdated and resets isDead=false so online nodes are shown correctly.
- *  4. Publishes a SensorUpdateEvent after the @Transactional commit so SSE broadcasts
+ *  2. Auto-provisions a node row the first time an unknown nodeId ingests (no manual SQL seed).
+ *  3. Only writes an Event row when the flood level actually changes (prevents write amplification).
+ *  4. Always updates node.lastUpdated and resets isDead=false so online nodes are shown correctly.
+ *  5. Publishes a SensorUpdateEvent after the @Transactional commit so SSE broadcasts
  *     reflect only durable DB state (via @TransactionalEventListener AFTER_COMMIT).
- *  5. Evicts "sensors", "dashboard", and "analytics" caches on every accepted reading.
+ *  6. Evicts "sensors", "dashboard", and "analytics" caches on every accepted reading.
  */
 @Slf4j
 @Service
@@ -61,7 +62,7 @@ public class IngestService {
         }
 
         Node node = nodeRepository.findByNodeId(req.nodeId())
-                .orElseThrow(() -> AppException.notFound("Node not found: " + req.nodeId()));
+                .orElseGet(() -> provisionNewNode(req));
 
         int previousLevel = node.getCurrentLevel() != null ? node.getCurrentLevel() : 0;
         int newLevel      = req.level();
@@ -123,6 +124,30 @@ public class IngestService {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Creates a minimal node row so MQTT/HTTP ingest can start without a manual SQL seed.
+     * Uses coordinates from the payload when present, otherwise Kuching centre defaults.
+     */
+    private Node provisionNewNode(IngestRequest req) {
+        double lat = req.latitude() != null ? req.latitude() : GeoUtils.KUCHING_LAT;
+        double lon = req.longitude() != null ? req.longitude() : GeoUtils.KUCHING_LON;
+        Node n = Node.builder()
+                .nodeId(req.nodeId())
+                .name("Node " + req.nodeId())
+                .latitude(lat)
+                .longitude(lon)
+                .currentLevel(0)
+                .isDead(false)
+                .area("Kuching")
+                .location("")
+                .state("Sarawak")
+                .lastUpdated(Instant.now())
+                .createdAt(Instant.now())
+                .build();
+        log.info("[Ingest] Auto-provisioned node nodeId={} lat={} lon={}", req.nodeId(), lat, lon);
+        return nodeRepository.save(n);
+    }
 
     private boolean isRateLimited(String nodeId) {
         long now = System.currentTimeMillis();

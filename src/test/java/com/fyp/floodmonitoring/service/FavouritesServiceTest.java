@@ -72,6 +72,7 @@ class FavouritesServiceTest {
             List<FavouriteNodeDto> result = favouritesService.getFavourites(USER_ID);
 
             assertThat(result).hasSize(1);
+            assertThat(result.get(0).nodeId()).isEqualTo(sampleNode.getNodeId());
             assertThat(result.get(0).name()).isEqualTo("Node 102782478");
             assertThat(result.get(0).favouritedAt()).isNotNull();
         }
