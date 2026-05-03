@@ -86,11 +86,18 @@ public class IngestService {
         node.setIsDead(false);   // node is publishing — it is online
         nodeRepository.save(node);
 
-        // Flood threshold: evaluate for WATCH (≥1), WARNING (≥2), CRITICAL (≥3)
+        String area = node.getArea() != null ? node.getArea() : "Kuching";
+        String displayName = node.getName() != null ? node.getName() : req.nodeId();
+
+        if (req.waterLevelMeters() != null) {
+            floodThresholdService.evaluatePhysicalOneFoot(
+                    req.nodeId(), displayName, req.waterLevelMeters(), area);
+        }
+
+        // Flood threshold: evaluate for WATCH (≥1), WARNING (≥2), CRITICAL (≥3) on discrete level bands
         boolean alertFired = false;
         if (levelRaised && newLevel >= 1) {
-            String area = node.getArea() != null ? node.getArea() : "Kuching";
-            floodThresholdService.evaluate(req.nodeId(), node.getName() != null ? node.getName() : req.nodeId(), newLevel, area);
+            floodThresholdService.evaluate(req.nodeId(), displayName, newLevel, area);
             alertFired = true;
             log.info("[Ingest] Threshold evaluated: nodeId={} level={}->{}", req.nodeId(), previousLevel, newLevel);
         }
