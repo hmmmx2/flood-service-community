@@ -6,5 +6,7 @@ public record CommunityCommentsPageDto(
         List<CommunityCommentDto> comments,
         long totalTopLevel,
         int page,
-        int size
+        int size,
+        /** All comment rows for this post (roots + replies); matches DB truth used by the listing query. */
+        long totalComments
 ) {}

@@ -124,7 +124,17 @@ public class CommunityService {
                 ? Set.copyOf(likeRepo.findPostIdByUserId(viewerId))
                 : Set.of();
 
-        return posts.map(p -> toDto(p, likedIds.contains(p.getId()), null));
+        // Batch live comment counts — one query for the whole page, avoiding N+1
+        List<UUID> postIds = posts.getContent().stream().map(CommunityPost::getId).toList();
+        Map<UUID, Integer> liveCounts = new HashMap<>();
+        if (!postIds.isEmpty()) {
+            for (Object[] row : commentRepo.countByPostIdIn(postIds)) {
+                liveCounts.put((UUID) row[0], ((Long) row[1]).intValue());
+            }
+        }
+
+        return posts.map(p -> toDto(p, likedIds.contains(p.getId()), null,
+                liveCounts.getOrDefault(p.getId(), p.getCommentsCount())));
     }
 
     @Transactional(readOnly = true)
@@ -185,7 +195,7 @@ public class CommunityService {
                         replyCountMap.getOrDefault(c.getId(), 0)))
                 .toList();
 
-        return new CommunityCommentsPageDto(dtos, total, page, safeSize);
+        return new CommunityCommentsPageDto(dtos, total, page, safeSize, all.size());
     }
 
     @Transactional
@@ -402,7 +412,7 @@ public class CommunityService {
         }
     }
 
-    /** Moderator hide — always preserves row + backup so restore works. */
+    /** Moderator hide — always preserves row + backup so restore works. Decrements post counter. */
     private void softHide(CommunityComment c, User moderator) {
         if (c.getContent() != null && !c.getContent().isEmpty()) {
             c.setContentBackup(c.getContent());
@@ -411,6 +421,7 @@ public class CommunityService {
         c.setDeletedAt(Instant.now());
         c.setDeletedBy(moderator);
         commentRepo.save(c);
+        postRepo.adjustComments(c.getPost().getId(), -1);
     }
 
     @Transactional(readOnly = true)
@@ -451,6 +462,7 @@ public class CommunityService {
         UUID postId = c.getPost().getId();
         long children = commentRepo.countByParent_Id(c.getId());
         if (children > 0) {
+            // Soft delete — keep row so children stay intact, but clear content
             if (c.getContent() != null && !c.getContent().isEmpty()) {
                 c.setContentBackup(c.getContent());
             }
@@ -461,8 +473,9 @@ public class CommunityService {
         } else {
             voteRepo.deleteByComment_Id(c.getId());
             commentRepo.delete(c);
-            postRepo.adjustComments(postId, -1);
         }
+        // Always decrement the cached counter regardless of soft vs hard delete
+        postRepo.adjustComments(postId, -1);
     }
 
     private AdminCommentListItemDto toAdminItem(CommunityComment c) {
@@ -495,6 +508,10 @@ public class CommunityService {
     }
 
     private CommunityPostDto toDto(CommunityPost p, boolean likedByMe, List<CommunityCommentDto> comments) {
+        return toDto(p, likedByMe, comments, p.getCommentsCount());
+    }
+
+    private CommunityPostDto toDto(CommunityPost p, boolean likedByMe, List<CommunityCommentDto> comments, int commentsCount) {
         User a = p.getAuthor();
         String name = displayName(a);
         CommunityGroup g = p.getGroup();
@@ -504,7 +521,7 @@ public class CommunityService {
                 g != null ? g.getSlug() : null,
                 g != null ? g.getName() : null,
                 p.getTitle(), p.getContent(), p.getImageUrl(),
-                Math.max(0, p.getLikesCount()), p.getCommentsCount(), likedByMe,
+                Math.max(0, p.getLikesCount()), Math.max(0, commentsCount), likedByMe,
                 p.getCreatedAt(), p.getUpdatedAt(), comments
         );
     }
