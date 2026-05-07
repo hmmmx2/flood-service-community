@@ -142,7 +142,14 @@ public class CommunityService {
         CommunityPost post = postRepo.findById(postId)
                 .orElseThrow(() -> AppException.notFound("Post not found"));
         boolean liked = viewerId != null && likeRepo.existsByPostIdAndUserId(postId, viewerId);
-        return toDto(post, liked, null);
+        // Always count comments live for the detail view so the badge
+        // matches the actual rows shown in the comment list. The
+        // denormalized community_posts.comments_count drifts when comments
+        // are removed outside the soft-delete path (e.g. seed data, manual
+        // SQL, hard delete cascades) — we'd otherwise show "5 Comments"
+        // above an empty list.
+        int liveCount = (int) commentRepo.countByPost_Id(postId);
+        return toDto(post, liked, null, liveCount);
     }
 
     @Transactional(readOnly = true)
