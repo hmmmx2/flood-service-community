@@ -136,7 +136,7 @@ public class PushNotificationService {
         String  priority      = isWatch ? "normal" : "high";
 
         String title = switch (alert.getSeverity()) {
-            case WATCH    -> "⚠️ Flood Watch — " + alert.getNodeName();
+            case WATCH    -> "⚠️ Flood Alert — " + alert.getNodeName();
             case WARNING  -> "🚨 Flood Warning — " + alert.getNodeName();
             case CRITICAL -> "🆘 CRITICAL FLOOD — " + alert.getNodeName();
         };
@@ -267,7 +267,7 @@ public class PushNotificationService {
         String levelName = switch (level) {
             case 3 -> "Critical";
             case 2 -> "Warning";
-            case 1 -> "Watch";
+            case 1 -> "Alert";
             default -> "Normal";
         };
         return String.format("Node %s has reached %s level (%.1fm). Stay alert and follow safety guidelines.",

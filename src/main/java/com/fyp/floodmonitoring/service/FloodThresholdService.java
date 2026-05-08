@@ -20,13 +20,17 @@ import java.util.concurrent.ConcurrentHashMap;
  * publishes FloodAlertCreatedEvent so the @TransactionalEventListener
  * fan-out fires only after the DB row is committed.
  *
- * Level → severity mapping:
- *   1 (≥ 1.0 m / 3.28 ft) → WATCH    (floodwatch-alerts channel)
- *   2 (≥ 2.5 m / 8.20 ft) → WARNING  (flood_emergency channel)
- *   3 (≥ 4.0 m / 13.1 ft) → CRITICAL (flood_emergency channel + sticky)
+ * Level → severity mapping (calibrated for Sabah small-stream sensors):
+ *   1 (≥ 1 ft / 0.3048 m) → ALERT    (rebranded WATCH — early notice)
+ *   2 (≥ 2 ft / 0.6096 m) → WARNING  (significant rise — pay attention)
+ *   3 (≥ 3 ft / 0.9144 m) → CRITICAL (evacuate / escalate to ops)
+ *
+ * The enum value remains {@code FloodSeverity.WATCH} for backwards
+ * compatibility with existing alert rows in the DB; UI labels show
+ * "Alert" everywhere a user can see them.
  *
  * Physical depth (when devices send {@code waterLevelMeters}):
- *   crossing ≥ 1.0 ft (0.3048 m) → WATCH with the measured depth stored on the alert.
+ *   crossing ≥ 1 ft (0.3048 m) → ALERT with the measured depth stored on the alert.
  */
 @Slf4j
 @Service
@@ -42,7 +46,21 @@ public class FloodThresholdService {
     @Value("${app.flood.dedup-window-minutes:30}")
     private int dedupWindowMinutes;
 
-    private static final double[] LEVEL_METERS = { 0.0, 1.0, 2.5, 4.0 };
+    /**
+     * Threshold depths in metres for each discrete level. Calibrated to
+     * 1 ft / 2 ft / 3 ft so a single sensor can drive the whole alert
+     * pipeline (DB stores the threshold band's representative depth on
+     * each alert row when no live measurement is available).
+     */
+    private static final double[] LEVEL_METERS = { 0.0, 0.3048, 0.6096, 0.9144 };
+
+    /** Map a measured water depth (metres) to a discrete flood level (0–3). */
+    public static int metersToLevel(double meters) {
+        if (meters >= LEVEL_METERS[3]) return 3;
+        if (meters >= LEVEL_METERS[2]) return 2;
+        if (meters >= LEVEL_METERS[1]) return 1;
+        return 0;
+    }
 
     /** Latest sampled depth per node — detects upward crossing of ONE_FOOT_METERS without a DB column. */
     private final ConcurrentHashMap<String, Double> lastSampledDepthMeters = new ConcurrentHashMap<>();

@@ -65,7 +65,14 @@ public class IngestService {
                 .orElseGet(() -> provisionNewNode(req));
 
         int previousLevel = node.getCurrentLevel() != null ? node.getCurrentLevel() : 0;
-        int newLevel      = req.level();
+        // Prefer deriving the level from the measured depth so the
+        // calibrated 1 ft / 2 ft / 3 ft gates are consistent across all
+        // devices, even when an older device firmware hard-codes its own
+        // level field. Fall back to whatever the device sent only when
+        // waterLevelMeters is missing.
+        int newLevel = req.waterLevelMeters() != null
+                ? FloodThresholdService.metersToLevel(req.waterLevelMeters())
+                : req.level();
         boolean levelChanged = newLevel != previousLevel;
         boolean levelRaised  = newLevel > previousLevel;
 

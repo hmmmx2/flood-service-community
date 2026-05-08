@@ -163,7 +163,7 @@ public class EmailService {
 
         double feet = alert.getWaterLevelMeters() * 3.28084;
         String subject = switch (alert.getSeverity()) {
-            case WATCH    -> "[FloodWatch] Flood Watch: " + alert.getNodeName();
+            case WATCH    -> "[FloodWatch] Flood Alert: " + alert.getNodeName();
             case WARNING  -> "[FloodWatch] ⚠ Flood Warning: " + alert.getNodeName();
             case CRITICAL -> "[FloodWatch] 🆘 CRITICAL FLOOD ALERT: " + alert.getNodeName();
         };

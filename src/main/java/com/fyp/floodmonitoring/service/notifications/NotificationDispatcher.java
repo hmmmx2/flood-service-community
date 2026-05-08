@@ -128,7 +128,7 @@ public class NotificationDispatcher {
         double feet = alert.getWaterLevelMeters() * 3.28084;
         String node = alert.getNodeName() != null ? alert.getNodeName() : alert.getNodeId();
         String severityLabel = switch (alert.getSeverity()) {
-            case WATCH    -> "Flood Watch";
+            case WATCH    -> "Flood Alert";
             case WARNING  -> "Flood Warning";
             case CRITICAL -> "CRITICAL flood alert";
         };
