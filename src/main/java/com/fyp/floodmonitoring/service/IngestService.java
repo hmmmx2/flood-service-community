@@ -46,10 +46,10 @@ public class IngestService {
     /** In-memory rate limiter: nodeId → last accepted timestamp (ms). Single-instance only. */
     private final ConcurrentHashMap<String, Long> lastAcceptedMs = new ConcurrentHashMap<>();
 
-    @Value("${app.mqtt.min-interval-ms:500}")
+    @Value("${app.ingest.min-interval-ms:500}")
     private long minIntervalMs;
 
-    // ── Public ingest (HTTP + MQTT path) ─────────────────────────────────────
+    // ── Public ingest (HTTP path) ────────────────────────────────────────────
 
     @Transactional
     @CacheEvict(value = {"sensors", "analytics", "dashboard"}, allEntries = true)
