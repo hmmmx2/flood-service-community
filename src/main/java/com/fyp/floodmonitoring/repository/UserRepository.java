@@ -43,4 +43,42 @@ public interface UserRepository extends JpaRepository<User, UUID> {
               AND s.enabled = true
             """, nativeQuery = true)
     java.util.List<User> findUsersWithEmailAlertsEnabled();
+
+    /**
+     * Radius-aware email recipient resolver — used by the
+     * FloodAlertFanOutListener so an alert about a sensor in Kota Kinabalu
+     * doesn't email a resident in Kuala Lumpur.
+     *
+     * Returns every emailAlerts=true user who EITHER:
+     *   (a) has no saved locations yet — legacy behaviour preserved, the
+     *       "all subscribers" blast still works for users who haven't
+     *       configured pins yet, OR
+     *   (b) has at least one saved location whose centre is within its
+     *       own per-pin alert_radius_km of the sensor.
+     *
+     * Bounding-box pre-filter (±0.6° ≈ 66 km, comfortably above the
+     * 50 km max radius) makes the trig only run for plausible matches.
+     */
+    @Query(value = """
+            SELECT DISTINCT u.* FROM users u
+            INNER JOIN user_settings s ON s.user_id = u.id
+                AND s.key = 'emailAlerts' AND s.enabled = true
+            WHERE
+              NOT EXISTS (SELECT 1 FROM user_saved_locations l WHERE l.user_id = u.id)
+              OR EXISTS (
+                  SELECT 1 FROM user_saved_locations l
+                  WHERE l.user_id = u.id
+                    AND l.latitude  BETWEEN :nodeLat - 0.6 AND :nodeLat + 0.6
+                    AND l.longitude BETWEEN :nodeLng - 0.6 AND :nodeLng + 0.6
+                    AND (
+                      6371.0 * acos(GREATEST(-1.0, LEAST(1.0,
+                        cos(radians(l.latitude)) * cos(radians(:nodeLat)) *
+                        cos(radians(:nodeLng) - radians(l.longitude)) +
+                        sin(radians(l.latitude)) * sin(radians(:nodeLat)))))
+                    ) <= l.alert_radius_km
+              )
+            """, nativeQuery = true)
+    java.util.List<User> findEmailSubscribersForFloodAt(
+            @org.springframework.data.repository.query.Param("nodeLat") double nodeLat,
+            @org.springframework.data.repository.query.Param("nodeLng") double nodeLng);
 }

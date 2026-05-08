@@ -101,15 +101,19 @@ public class EmailService {
     }
 
     /**
-     * Sends a flood alert email to all users who have email_alerts enabled.
-     * Uses HTML for severity-appropriate styling.
+     * Sends a flood alert email to users who have email_alerts enabled
+     * AND who are either (a) without any saved-location pins (legacy
+     * "all subscribers" path), or (b) within at least one of their pins'
+     * alert radii of this sensor. Caller passes the sensor coordinate.
+     *
      * Runs asynchronously — called from FloodAlertFanOutListener.
      */
     @Async
-    public void sendFloodAlertToAllSubscribers(FloodAlert alert) {
-        List<User> subscribers = userRepository.findUsersWithEmailAlertsEnabled();
+    public void sendFloodAlertToAllSubscribers(FloodAlert alert, double nodeLat, double nodeLng) {
+        List<User> subscribers = userRepository.findEmailSubscribersForFloodAt(nodeLat, nodeLng);
         if (subscribers.isEmpty()) {
-            log.debug("[Email] No email subscribers for flood alert nodeId={}", alert.getNodeId());
+            log.debug("[Email] No email subscribers in range for flood alert nodeId={}",
+                    alert.getNodeId());
             return;
         }
 

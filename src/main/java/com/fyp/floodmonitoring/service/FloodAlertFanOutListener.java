@@ -2,7 +2,9 @@ package com.fyp.floodmonitoring.service;
 
 import com.fyp.floodmonitoring.dto.response.FloodAlertDto;
 import com.fyp.floodmonitoring.entity.FloodAlert;
+import com.fyp.floodmonitoring.entity.Node;
 import com.fyp.floodmonitoring.event.FloodAlertCreatedEvent;
+import com.fyp.floodmonitoring.repository.NodeRepository;
 import com.fyp.floodmonitoring.sse.SseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *
  * @Async moves execution off the ingest request thread so HTTP 200 is
  * returned to the IoT device before push/email I/O completes.
+ *
+ * Phase 3: email recipients are now filtered by the alerting node's
+ * coordinate vs. each user's saved-location pin radii. Push and SSE
+ * remain blast-style for now (push is gated by individual user_settings
+ * keys; SSE is for the in-page toast which is a UX cue, not a targeted
+ * alert). Push will be migrated to radius-aware in a future pass.
  */
 @Slf4j
 @Component
@@ -29,6 +37,7 @@ public class FloodAlertFanOutListener {
     private final PushNotificationService pushNotificationService;
     private final EmailService            emailService;
     private final SseService              sseService;
+    private final NodeRepository          nodeRepository;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -38,7 +47,20 @@ public class FloodAlertFanOutListener {
                 alert.getId(), alert.getSeverity(), alert.getNodeId());
 
         pushNotificationService.notifyFloodThreshold(alert);
-        emailService.sendFloodAlertToAllSubscribers(alert);
         sseService.broadcastFloodAlert(FloodAlertDto.from(alert));
+
+        // Look up the alerting node's coordinate so the email path can
+        // filter recipients by their saved-location pin radii. If we
+        // can't find the node row (race / orphaned alert / test data),
+        // fall back to broadcasting to everyone — better an extra email
+        // than a missed flood warning.
+        Node node = nodeRepository.findByNodeId(alert.getNodeId()).orElse(null);
+        if (node != null && node.getLatitude() != null && node.getLongitude() != null) {
+            emailService.sendFloodAlertToAllSubscribers(
+                    alert, node.getLatitude(), node.getLongitude());
+        } else {
+            log.warn("[FanOut] Node not found for nodeId={}, sending to all subscribers", alert.getNodeId());
+            emailService.sendFloodAlertToAllSubscribers(alert, 0.0, 0.0);
+        }
     }
 }
