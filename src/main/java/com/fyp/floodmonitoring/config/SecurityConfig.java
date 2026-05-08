@@ -54,6 +54,8 @@ public class SecurityConfig {
                     "/auth/forgot-password",
                     "/auth/verify-reset-code",
                     "/auth/reset-password",
+                    "/auth/verify-email",
+                    "/auth/resend-verification",
                     "/ingest").permitAll()         // IoT devices — API-key validated in controller
                 .requestMatchers(HttpMethod.GET,
                     "/sensors",

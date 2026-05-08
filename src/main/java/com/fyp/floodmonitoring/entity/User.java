@@ -50,6 +50,18 @@ public class User {
     @Column(name = "last_login")
     private Instant lastLogin;
 
+    /**
+     * Tracks whether the user has confirmed ownership of their email by
+     * entering the 6-digit code we send during registration. Existing rows
+     * before this column existed are treated as verified — Hibernate's
+     * auto-migration adds the column with a server-side DEFAULT TRUE so
+     * pre-existing accounts keep working without a backfill script. New
+     * registrations explicitly set this to false until the user confirms.
+     */
+    @Builder.Default
+    @Column(name = "email_verified", nullable = false, columnDefinition = "boolean default true")
+    private Boolean emailVerified = Boolean.TRUE;
+
     /** Expo push token registered by the mobile app — nullable until the user grants permission. */
     @Column(name = "push_token", length = 500)
     private String pushToken;

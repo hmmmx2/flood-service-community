@@ -104,6 +104,47 @@ public class EmailService {
     }
 
     /**
+     * Sends a 6-digit registration verification code so a new user can
+     * prove ownership of the email they signed up with. Mirrors
+     * {@link #sendPasswordResetCode(String, String)} — same dev-mode
+     * fallback (logs to console when the Resend API key is unset).
+     */
+    @Async
+    public void sendRegistrationCode(String toEmail, String code) {
+        String subject = "Verify your Flood Monitor account";
+        String body = String.format(
+                "Welcome to Flood Monitor!%n%n" +
+                "To finish creating your account, enter this code on the verification screen:%n%n" +
+                "    %s%n%n" +
+                "This code expires in 10 minutes. If you didn't sign up, just ignore this email.%n%n" +
+                "— Flood Monitor Team",
+                code);
+
+        if (resendApiKey == null || resendApiKey.isBlank()) {
+            log.info("[Email DEV] To={} Subject='{}' RegisterCode={}", toEmail, subject, code);
+            return;
+        }
+
+        String actualRecipient = toEmail;
+        if ("development".equals(environment) && devRecipient != null && !devRecipient.isBlank()) {
+            log.info("[Email DEV] Redirecting registration email from {} → {} (dev mode)", toEmail, devRecipient);
+            actualRecipient = devRecipient;
+        }
+
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromAddress);
+            message.setTo(actualRecipient);
+            message.setSubject(subject);
+            message.setText(body);
+            mailSender.send(message);
+            log.info("[Email] Registration code sent to {} (intended: {})", actualRecipient, toEmail);
+        } catch (MailException e) {
+            log.error("[Email] Failed to send registration email to {}: {}", actualRecipient, e.getMessage());
+        }
+    }
+
+    /**
      * Sends a flood alert email to users who have email_alerts enabled
      * AND who are either (a) without any saved-location pins (legacy
      * "all subscribers" path), or (b) within at least one of their pins'

@@ -2,6 +2,7 @@ package com.fyp.floodmonitoring.controller;
 
 import com.fyp.floodmonitoring.dto.request.*;
 import com.fyp.floodmonitoring.dto.response.LoginResponseDto;
+import com.fyp.floodmonitoring.dto.response.RegisterPendingDto;
 import com.fyp.floodmonitoring.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,9 @@ import java.util.UUID;
  * Public authentication endpoints (no JWT required).
  *
  * <pre>
- * POST /auth/register
+ * POST /auth/register               (returns RegisterPendingDto — code emailed)
+ * POST /auth/verify-email           (consumes the code, returns a session)
+ * POST /auth/resend-verification
  * POST /auth/login
  * POST /auth/refresh
  * POST /auth/forgot-password
@@ -35,8 +38,22 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<LoginResponseDto> register(@Valid @RequestBody RegisterRequest req) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(req));
+    public ResponseEntity<RegisterPendingDto> register(@Valid @RequestBody RegisterRequest req) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(authService.register(req));
+    }
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<LoginResponseDto> verifyEmail(@Valid @RequestBody VerifyEmailRequest req) {
+        return ResponseEntity.ok(authService.verifyEmail(req));
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<Map<String, String>> resendVerification(
+            @Valid @RequestBody ResendVerificationRequest req) {
+
+        authService.resendVerification(req);
+        return ResponseEntity.ok(Map.of(
+                "message", "If an account exists for this email, a fresh verification code has been sent."));
     }
 
     @PostMapping("/login")

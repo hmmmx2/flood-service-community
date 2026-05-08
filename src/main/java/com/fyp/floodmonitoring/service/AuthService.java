@@ -31,13 +31,14 @@ public class AuthService {
     private static final List<String> DEFAULT_SETTING_KEYS =
             List.of("pushNotifications", "smsNotifications", "emailNotifications", "lowDataMode");
 
-    private final UserRepository             userRepository;
-    private final RefreshTokenRepository     refreshTokenRepository;
-    private final PasswordResetCodeRepository resetCodeRepository;
-    private final UserSettingRepository      settingRepository;
-    private final JwtTokenProvider           tokenProvider;
-    private final PasswordEncoder            passwordEncoder;
-    private final EmailService               emailService;
+    private final UserRepository                  userRepository;
+    private final RefreshTokenRepository          refreshTokenRepository;
+    private final PasswordResetCodeRepository     resetCodeRepository;
+    private final EmailVerificationCodeRepository emailVerificationCodeRepository;
+    private final UserSettingRepository           settingRepository;
+    private final JwtTokenProvider                tokenProvider;
+    private final PasswordEncoder                 passwordEncoder;
+    private final EmailService                    emailService;
 
     @Value("${app.jwt.refresh-token-expiry-ms}")
     private long refreshTokenExpiryMs;
@@ -50,24 +51,118 @@ public class AuthService {
 
     // ── Register ──────────────────────────────────────────────────────────────
 
+    /**
+     * Provisions a new (unverified) account and sends a 6-digit code to
+     * the user's email. The user must call {@link #verifyEmail} with that
+     * code before they can log in. Idempotent on the email side: if the
+     * row already exists but is still {@code emailVerified=false}, we
+     * regenerate + resend the code rather than failing — this lets a
+     * user retry after losing the original email.
+     */
     @Transactional
-    public LoginResponseDto register(RegisterRequest req) {
+    public RegisterPendingDto register(RegisterRequest req) {
         String email = req.email().toLowerCase().trim();
-        if (userRepository.existsByEmail(email)) {
-            throw AppException.conflict("An account with this email already exists");
+
+        var existing = userRepository.findByEmail(email);
+        User user;
+        if (existing.isPresent()) {
+            User row = existing.get();
+            if (Boolean.TRUE.equals(row.getEmailVerified())) {
+                throw AppException.conflict("An account with this email already exists");
+            }
+            // Unverified row — refresh password / name and reuse it so the
+            // user can keep trying without "email already exists" errors.
+            row.setFirstName(req.firstName().trim());
+            row.setLastName(req.lastName().trim());
+            row.setPasswordHash(passwordEncoder.encode(req.password()));
+            user = userRepository.save(row);
+        } else {
+            user = User.builder()
+                    .firstName(req.firstName().trim())
+                    .lastName(req.lastName().trim())
+                    .email(email)
+                    .passwordHash(passwordEncoder.encode(req.password()))
+                    .role(Role.CUSTOMER.getPersistenceValue())
+                    .emailVerified(false)
+                    .build();
+            user = userRepository.save(user);
+            seedDefaultSettings(user.getId());
         }
 
-        User user = User.builder()
-                .firstName(req.firstName().trim())
-                .lastName(req.lastName().trim())
-                .email(email)
-                .passwordHash(passwordEncoder.encode(req.password()))
-                .role(Role.CUSTOMER.getPersistenceValue())
-                .build();
-        user = userRepository.save(user);
+        String code = issueEmailVerificationCode(user.getId());
+        emailService.sendRegistrationCode(email, code);
+        log.info("[Auth] Registration verification code dispatched for {} [env={}]", email, environment);
 
-        seedDefaultSettings(user.getId());
+        // In dev mode (no Resend key), surface the code so the local UI
+        // can auto-fill it for testing without checking a real inbox.
+        String devCode = "development".equals(environment) ? code : null;
+        return new RegisterPendingDto(
+                email,
+                "Enter the 6-digit code we just emailed to confirm your account.",
+                devCode);
+    }
+
+    /**
+     * Verifies the registration code and returns a real session. The
+     * account is marked {@code email_verified=true} on success.
+     */
+    @Transactional
+    public LoginResponseDto verifyEmail(VerifyEmailRequest req) {
+        String email = req.email().toLowerCase().trim();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> AppException.notFound("No registration found for this email"));
+
+        if (Boolean.TRUE.equals(user.getEmailVerified())) {
+            // Already verified — let the user just log in normally.
+            throw AppException.conflict("This account is already verified — please sign in.");
+        }
+
+        EmailVerificationCode record = emailVerificationCodeRepository
+                .findLatestUnused(user.getId(), req.code())
+                .orElseThrow(() -> AppException.badRequest("INVALID_VERIFICATION_CODE", "Invalid verification code"));
+
+        if (record.getExpiresAt().isBefore(Instant.now())) {
+            throw AppException.badRequest("VERIFICATION_CODE_EXPIRED", "The verification code has expired");
+        }
+
+        record.setUsed(true);
+        emailVerificationCodeRepository.save(record);
+
+        user.setEmailVerified(true);
+        userRepository.updateLastLogin(user.getId(), Instant.now());
+        userRepository.save(user);
+
         return buildSession(user);
+    }
+
+    /**
+     * Re-sends the verification code if the user lost the email. No-op
+     * (silently) if the email is already verified — we don't want to
+     * leak whether the address has an account.
+     */
+    @Transactional
+    public void resendVerification(ResendVerificationRequest req) {
+        String email = req.email().toLowerCase().trim();
+        var userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) return;
+        User user = userOpt.get();
+        if (Boolean.TRUE.equals(user.getEmailVerified())) return;
+
+        String code = issueEmailVerificationCode(user.getId());
+        emailService.sendRegistrationCode(email, code);
+        log.info("[Auth] Re-sent registration code to {} [env={}]", email, environment);
+    }
+
+    /** Invalidate any pending codes for the user, mint a fresh one, and persist it. */
+    private String issueEmailVerificationCode(UUID userId) {
+        emailVerificationCodeRepository.invalidateAllForUser(userId);
+        String code = String.format("%06d", new Random().nextInt(900000) + 100000);
+        emailVerificationCodeRepository.save(EmailVerificationCode.builder()
+                .userId(userId)
+                .code(code)
+                .expiresAt(Instant.now().plusSeconds(600)) // 10 min
+                .build());
+        return code;
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -80,6 +175,15 @@ public class AuthService {
 
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
             throw AppException.unauthorized("Invalid email or password");
+        }
+
+        // Block sign-in for accounts whose email hasn't been confirmed
+        // yet. Frontend recognises the EMAIL_NOT_VERIFIED code and bumps
+        // the user to /verify-email so they can finish the flow.
+        if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+            throw AppException.badRequest(
+                "EMAIL_NOT_VERIFIED",
+                "Please verify your email before signing in.");
         }
 
         userRepository.updateLastLogin(user.getId(), Instant.now());
