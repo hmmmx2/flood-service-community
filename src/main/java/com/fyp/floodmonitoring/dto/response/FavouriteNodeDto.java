@@ -4,7 +4,8 @@ import java.util.List;
 
 /**
  * Extends {@link SensorNodeDto} with current flood level, last updated time,
- * and the timestamp when the user bookmarked this node.
+ * the timestamp when the user bookmarked this node, and the per-favourite
+ * channel preferences (email / SMS / WhatsApp / in-app push).
  */
 public record FavouriteNodeDto(
         String id,
@@ -19,5 +20,9 @@ public record FavouriteNodeDto(
         String state,
         int currentLevel,
         String lastUpdated,
-        String favouritedAt
+        String favouritedAt,
+        boolean emailEnabled,
+        boolean smsEnabled,
+        boolean whatsappEnabled,
+        boolean pushEnabled
 ) {}

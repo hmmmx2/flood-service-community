@@ -2,7 +2,9 @@ package com.fyp.floodmonitoring.service.notifications;
 
 import com.fyp.floodmonitoring.entity.FloodAlert;
 import com.fyp.floodmonitoring.entity.User;
+import com.fyp.floodmonitoring.entity.UserFavouriteNode;
 import com.fyp.floodmonitoring.entity.UserSetting;
+import com.fyp.floodmonitoring.repository.UserFavouriteNodeRepository;
 import com.fyp.floodmonitoring.repository.UserRepository;
 import com.fyp.floodmonitoring.repository.UserSettingRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,11 +38,12 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class NotificationDispatcher {
 
-    private final UserRepository        userRepository;
-    private final UserSettingRepository userSettingRepository;
-    private final InAppProvider         inAppProvider;
-    private final SmsProvider           smsProvider;
-    private final WhatsAppProvider      whatsAppProvider;
+    private final UserRepository              userRepository;
+    private final UserSettingRepository       userSettingRepository;
+    private final UserFavouriteNodeRepository favRepository;
+    private final InAppProvider               inAppProvider;
+    private final SmsProvider                 smsProvider;
+    private final WhatsAppProvider            whatsAppProvider;
 
     private static final Set<String> CHANNEL_KEYS =
             Set.of("inAppAlerts", "smsAlerts", "whatsappAlerts", "emailAlerts");
@@ -65,6 +68,20 @@ public class NotificationDispatcher {
 
         for (User user : recipients) {
             Set<String> enabled = enabledChannels(user.getId());
+
+            // If the user has a favourite for this specific sensor, apply
+            // its per-channel toggles as a MASK on top of their global
+            // preferences — a channel must be enabled in BOTH places to
+            // fire. (No favourite = global prefs only.)
+            UserFavouriteNode fav = favRepository
+                    .findByUserIdAndBusinessNodeId(user.getId(), alert.getNodeId())
+                    .orElse(null);
+            if (fav != null) {
+                if (!Boolean.TRUE.equals(fav.getPushEnabled()))     enabled.remove("inAppAlerts");
+                if (!Boolean.TRUE.equals(fav.getSmsEnabled()))      enabled.remove("smsAlerts");
+                if (!Boolean.TRUE.equals(fav.getWhatsappEnabled())) enabled.remove("whatsappAlerts");
+                if (!Boolean.TRUE.equals(fav.getEmailEnabled()))    enabled.remove("emailAlerts");
+            }
 
             if (enabled.contains("inAppAlerts")) {
                 try {

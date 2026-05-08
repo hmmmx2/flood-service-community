@@ -1,6 +1,7 @@
 package com.fyp.floodmonitoring.controller;
 
 import com.fyp.floodmonitoring.dto.request.AddFavouriteRequest;
+import com.fyp.floodmonitoring.dto.request.UpdateFavouriteChannelsRequest;
 import com.fyp.floodmonitoring.dto.response.FavouriteNodeDto;
 import com.fyp.floodmonitoring.service.FavouritesService;
 import jakarta.validation.Valid;
@@ -19,6 +20,7 @@ import java.util.UUID;
  * <pre>
  *   GET    /favourites           → list all bookmarked nodes
  *   POST   /favourites           → bookmark a node   { nodeId: UUID }
+ *   PATCH  /favourites/{nodeId}  → update channel toggles { email/sms/whatsapp/push: bool }
  *   DELETE /favourites/{nodeId}  → remove bookmark
  * </pre>
  */
@@ -44,6 +46,16 @@ public class FavouritesController {
 
         UUID userId = UUID.fromString(principal.getUsername());
         return ResponseEntity.ok(favouritesService.addFavourite(userId, req));
+    }
+
+    @PatchMapping("/{nodeId}")
+    public ResponseEntity<FavouriteNodeDto> updateChannels(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable String nodeId,
+            @RequestBody UpdateFavouriteChannelsRequest req) {
+
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(favouritesService.updateChannels(userId, nodeId, req));
     }
 
     @DeleteMapping("/{nodeId}")

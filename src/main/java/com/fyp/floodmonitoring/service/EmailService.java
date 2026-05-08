@@ -2,6 +2,8 @@ package com.fyp.floodmonitoring.service;
 
 import com.fyp.floodmonitoring.entity.FloodAlert;
 import com.fyp.floodmonitoring.entity.User;
+import com.fyp.floodmonitoring.entity.UserFavouriteNode;
+import com.fyp.floodmonitoring.repository.UserFavouriteNodeRepository;
 import com.fyp.floodmonitoring.repository.UserRepository;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +34,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EmailService {
 
-    private final JavaMailSender  mailSender;
-    private final UserRepository  userRepository;
+    private final JavaMailSender              mailSender;
+    private final UserRepository              userRepository;
+    private final UserFavouriteNodeRepository favRepository;
 
     @Value("${app.email.from-address}")
     private String fromAddress;
@@ -125,6 +128,18 @@ public class EmailService {
         };
 
         for (User user : subscribers) {
+            // Per-favourite override: if the user has a favourite for this
+            // sensor with emailEnabled=false, skip — they've explicitly
+            // muted email for this specific node.
+            UserFavouriteNode fav = favRepository
+                    .findByUserIdAndBusinessNodeId(user.getId(), alert.getNodeId())
+                    .orElse(null);
+            if (fav != null && !Boolean.TRUE.equals(fav.getEmailEnabled())) {
+                log.debug("[Email] Skipping userId={} — email disabled on favourite for nodeId={}",
+                        user.getId(), alert.getNodeId());
+                continue;
+            }
+
             String recipient = resolveRecipient(user.getEmail());
             try {
                 if (resendApiKey == null || resendApiKey.isBlank()) {
