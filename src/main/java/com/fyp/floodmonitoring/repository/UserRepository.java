@@ -88,8 +88,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      *   • has at least one of {emailAlerts, smsAlerts, whatsappAlerts,
      *     inAppAlerts} enabled in user_settings, AND
      *   • EITHER has no saved-location pins (legacy "all subscribers"
-     *     fallback) OR has a saved location whose centre is within its
-     *     own per-pin alert_radius_km of the alerting sensor.
+     *     fallback), OR has a saved location whose centre is within its
+     *     own per-pin alert_radius_km of the alerting sensor, OR has
+     *     starred (favourited) the alerting sensor regardless of radius.
      *
      * The dispatcher then looks up each user's individual channel flags
      * (and phone) before deciding what to send. Same bounding-box pre-
@@ -114,8 +115,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                         sin(radians(l.latitude)) * sin(radians(:nodeLat)))))
                     ) <= l.alert_radius_km
               )
+              OR EXISTS (
+                  SELECT 1 FROM user_favourite_nodes f
+                  JOIN nodes n ON n.id = f.node_id
+                  WHERE f.user_id = u.id AND n.node_id = :alertNodeIdStr
+              )
             """, nativeQuery = true)
     java.util.List<User> findNotificationSubscribersForFloodAt(
-            @org.springframework.data.repository.query.Param("nodeLat") double nodeLat,
-            @org.springframework.data.repository.query.Param("nodeLng") double nodeLng);
+            @org.springframework.data.repository.query.Param("nodeLat")        double nodeLat,
+            @org.springframework.data.repository.query.Param("nodeLng")        double nodeLng,
+            @org.springframework.data.repository.query.Param("alertNodeIdStr") String alertNodeIdStr);
 }

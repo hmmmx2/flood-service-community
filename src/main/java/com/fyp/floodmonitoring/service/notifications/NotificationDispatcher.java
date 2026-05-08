@@ -53,7 +53,8 @@ public class NotificationDispatcher {
      */
     @Async
     public void dispatchFloodAlert(FloodAlert alert, double nodeLat, double nodeLng) {
-        List<User> recipients = userRepository.findNotificationSubscribersForFloodAt(nodeLat, nodeLng);
+        List<User> recipients = userRepository.findNotificationSubscribersForFloodAt(
+                nodeLat, nodeLng, alert.getNodeId());
         if (recipients.isEmpty()) {
             log.debug("[Dispatch] No notification subscribers in range nodeId={}", alert.getNodeId());
             return;
