@@ -5,7 +5,10 @@ import com.fyp.floodmonitoring.dto.response.*;
 import com.fyp.floodmonitoring.entity.*;
 import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.repository.*;
+import com.fyp.floodmonitoring.service.notifications.InAppProvider;
+import com.fyp.floodmonitoring.service.notifications.NotificationPayload;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -15,6 +18,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CommunityService {
@@ -26,6 +30,7 @@ public class CommunityService {
     private final CommunityGroupRepository groupRepo;
     private final CommunityGroupMemberRepository memberRepo;
     private final UserRepository userRepo;
+    private final InAppProvider inAppProvider;
 
     // ── Groups ────────────────────────────────────────────────────────────────
 
@@ -162,7 +167,7 @@ public class CommunityService {
             default -> "new";
         };
         int safeSize = Math.max(1, Math.min(size, 50));
-        List<CommunityComment> all = commentRepo.findByPost_IdOrderByCreatedAtAsc(postId);
+        List<CommunityComment> all = commentRepo.findByPostIdOrderByCreatedAtAsc(postId);
         List<CommunityComment> roots = all.stream().filter(c -> c.getParent() == null).toList();
 
         List<CommunityComment> sortedRoots = new ArrayList<>(roots);
@@ -228,6 +233,31 @@ public class CommunityService {
 
         if (group != null) {
             groupRepo.adjustPosts(group.getId(), 1);
+
+            // Notify every member of the group (except the author) that
+            // a new post landed. Best-effort — failures don't block the
+            // post itself.
+            try {
+                List<UUID> recipients = memberRepo.findUserIdByGroupId(group.getId());
+                String authorName = displayName(author);
+                String snippet = trimSnippet(post.getContent());
+                String link = "/post/" + post.getId();
+                String title = "New post in " + group.getName();
+                String body = authorName + ": " + truncate(post.getTitle(), 80)
+                        + (snippet.isEmpty() ? "" : " — " + snippet);
+                for (UUID memberId : recipients) {
+                    if (memberId == null || memberId.equals(userId)) continue;
+                    inAppProvider.deliver(memberId, new NotificationPayload(
+                            "community.post",
+                            "info",
+                            title,
+                            body,
+                            null,
+                            link));
+                }
+            } catch (Exception e) {
+                log.warn("[Community] Failed to dispatch new-post notifications: {}", e.getMessage());
+            }
         }
         return toDto(post, false, null);
     }
@@ -309,8 +339,67 @@ public class CommunityService {
         comment = commentRepo.save(comment);
         postRepo.adjustComments(postId, 1);
 
+        // Notify the post author when someone comments on their post,
+        // and notify the parent comment's author when someone replies
+        // to their comment. Both skip self-notifications. Failures are
+        // swallowed — the comment itself is the source of truth.
+        try {
+            String snippet = trimSnippet(comment.getContent());
+            String postLink = "/post/" + postId;
+            String authorName = displayName(author);
+
+            if (parent == null) {
+                User postAuthor = post.getAuthor();
+                if (postAuthor != null && !postAuthor.getId().equals(userId)) {
+                    inAppProvider.deliver(postAuthor.getId(), new NotificationPayload(
+                            "community.comment",
+                            "info",
+                            authorName + " commented on \"" + truncate(post.getTitle(), 60) + "\"",
+                            snippet,
+                            null,
+                            postLink));
+                }
+            } else {
+                User parentAuthor = parent.getAuthor();
+                if (parentAuthor != null && !parentAuthor.getId().equals(userId)) {
+                    inAppProvider.deliver(parentAuthor.getId(), new NotificationPayload(
+                            "community.reply",
+                            "info",
+                            authorName + " replied to your comment",
+                            snippet,
+                            null,
+                            postLink + "/comment/" + comment.getId()));
+                }
+                // Also let the post author know their thread is active —
+                // unless they are the replier or already the parent author.
+                User postAuthor = post.getAuthor();
+                if (postAuthor != null
+                        && !postAuthor.getId().equals(userId)
+                        && (parentAuthor == null || !postAuthor.getId().equals(parentAuthor.getId()))) {
+                    inAppProvider.deliver(postAuthor.getId(), new NotificationPayload(
+                            "community.comment",
+                            "info",
+                            "New reply on \"" + truncate(post.getTitle(), 60) + "\"",
+                            snippet,
+                            null,
+                            postLink));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[Community] Failed to dispatch comment notification: {}", e.getMessage());
+        }
+
         int replies = (int) commentRepo.countByParent_Id(comment.getId());
         return toCommentDto(comment, 0, replies);
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
+    }
+
+    private static String trimSnippet(String s) {
+        return truncate(s == null ? "" : s.replaceAll("\\s+", " ").trim(), 140);
     }
 
     @Transactional

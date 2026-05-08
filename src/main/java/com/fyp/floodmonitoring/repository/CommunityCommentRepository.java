@@ -11,7 +11,15 @@ import java.util.UUID;
 
 public interface CommunityCommentRepository extends JpaRepository<CommunityComment, UUID> {
 
-    List<CommunityComment> findByPost_IdOrderByCreatedAtAsc(UUID postId);
+    /**
+     * Lists all comments for a post, oldest first. Uses an explicit JPQL
+     * with the `c.post.id` path (proven to compile + match the same
+     * syntax {@link #countByPostIdIn} uses), instead of the Spring Data
+     * derived-method name {@code findByPost_IdOrderByCreatedAtAsc} which
+     * was returning empty result-sets on production for some posts.
+     */
+    @Query("SELECT c FROM CommunityComment c WHERE c.post.id = :postId ORDER BY c.createdAt ASC")
+    List<CommunityComment> findByPostIdOrderByCreatedAtAsc(@Param("postId") UUID postId);
 
     long countByParent_Id(UUID parentId);
 

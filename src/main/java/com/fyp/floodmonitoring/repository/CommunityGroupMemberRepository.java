@@ -16,4 +16,8 @@ public interface CommunityGroupMemberRepository extends JpaRepository<CommunityG
 
     @Query("SELECT m.groupId FROM CommunityGroupMember m WHERE m.userId = :userId")
     List<UUID> findGroupIdByUserId(@Param("userId") UUID userId);
+
+    /** Used by the new-post fan-out — every member receives a notification when someone posts in their group. */
+    @Query("SELECT m.userId FROM CommunityGroupMember m WHERE m.groupId = :groupId")
+    List<UUID> findUserIdByGroupId(@Param("groupId") UUID groupId);
 }

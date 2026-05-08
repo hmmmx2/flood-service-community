@@ -4,9 +4,14 @@ import com.fyp.floodmonitoring.dto.request.CreateBlogRequest;
 import com.fyp.floodmonitoring.dto.request.UpdateBlogRequest;
 import com.fyp.floodmonitoring.dto.response.BlogDto;
 import com.fyp.floodmonitoring.entity.Blog;
+import com.fyp.floodmonitoring.entity.User;
 import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.repository.BlogRepository;
+import com.fyp.floodmonitoring.repository.UserRepository;
+import com.fyp.floodmonitoring.service.notifications.InAppProvider;
+import com.fyp.floodmonitoring.service.notifications.NotificationPayload;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -15,11 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BlogService {
 
     private final BlogRepository blogRepository;
+    private final UserRepository userRepository;
+    private final InAppProvider inAppProvider;
 
     // ── Public read ───────────────────────────────────────────────────────────
 
@@ -63,7 +71,32 @@ public class BlogService {
                 .category(req.category() != null ? req.category() : "General")
                 .isFeatured(req.isFeatured() != null ? req.isFeatured() : false)
                 .build();
-        return toDto(blogRepository.save(blog));
+        Blog saved = blogRepository.save(blog);
+
+        // Fan out an in-app notification to every regular customer so the
+        // community is informed when a new blog post lands. Best-effort —
+        // failures don't block the publish itself.
+        try {
+            String snippet = saved.getBody() == null ? "" : saved.getBody().replaceAll("\\s+", " ").trim();
+            if (snippet.length() > 140) snippet = snippet.substring(0, 139) + "…";
+            String link = "/blogs/" + saved.getId();
+            String title = "New blog post: " + (saved.getTitle().length() > 80
+                    ? saved.getTitle().substring(0, 79) + "…" : saved.getTitle());
+            for (User u : userRepository.findAll()) {
+                if (u == null || !"customer".equalsIgnoreCase(u.getRole())) continue;
+                inAppProvider.deliver(u.getId(), new NotificationPayload(
+                        "blog.new",
+                        "info",
+                        title,
+                        snippet,
+                        null,
+                        link));
+            }
+        } catch (Exception e) {
+            log.warn("[Blog] Failed to dispatch new-blog notifications: {}", e.getMessage());
+        }
+
+        return toDto(saved);
     }
 
     @Transactional
