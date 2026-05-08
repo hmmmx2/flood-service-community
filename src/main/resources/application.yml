@@ -107,6 +107,19 @@ app:
     dev-recipient: ${DEV_EMAIL_RECIPIENT:}
   admin:
     seed-email: ${ADMIN_SEED_EMAIL:}
+  # Boot-time geocode backfill — set GEOCODE_BACKFILL=true once after a
+  # fresh node import to populate nodes.address / area / state from
+  # Google Maps. The /admin/nodes/geocode-backfill endpoint can also
+  # be used on demand (admin role required).
+  geocode-backfill: ${GEOCODE_BACKFILL:false}
+
+# ── Google Maps Geocoding API key ────────────────────────────────────────────
+# Free tier: $200/month credit ≈ 40k reverse-geocode calls. Set the key
+# in .env (GOOGLE_MAPS_API_KEY=...) — when unset, GeocodingService logs
+# a warning and every reverseGeocode() call returns Optional.empty().
+google:
+  maps:
+    geocoding-api-key: ${GOOGLE_MAPS_API_KEY:}
     seed-password: ${ADMIN_SEED_PASSWORD:}
     seed-first-name: ${ADMIN_SEED_FIRST_NAME:Admin}
     seed-last-name: ${ADMIN_SEED_LAST_NAME:User}

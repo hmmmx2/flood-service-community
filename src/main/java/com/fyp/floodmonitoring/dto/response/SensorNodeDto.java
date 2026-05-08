@@ -9,9 +9,10 @@ public record SensorNodeDto(
         String status,          // "active" | "inactive" | "warning"
         String distance,        // e.g. "3.2 km"
         List<Double> coordinate,// [longitude, latitude] — kept for backward compatibility
-        String area,
-        String location,
-        String state,
+        String area,            // neighbourhood / district (post-geocoding)
+        String location,        // human-readable place description
+        String state,           // Malaysian state (post-geocoding)
+        String address,         // full reverse-geocoded address line (NEW, may be null)
         Integer currentLevel,   // 0=dry 1=normal 2=warning 3=critical
         Boolean isDead,
         String lastUpdated,     // ISO-8601

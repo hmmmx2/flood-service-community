@@ -41,6 +41,14 @@ public class SensorService {
         int level = n.getCurrentLevel() != null ? n.getCurrentLevel() : 0;
         boolean dead = Boolean.TRUE.equals(n.getIsDead());
 
+        // Surface DB values directly. The hardcoded "Kuching" / "Sarawak"
+        // fallbacks have been removed — after the Phase 2 geocoding
+        // backfill (POST /admin/nodes/geocode-backfill or
+        // GEOCODE_BACKFILL=true on next boot), every node has its real
+        // area / state / address derived from its actual coordinates.
+        // Pre-backfill rows simply expose null for the missing fields,
+        // and the frontend's "Saved sensor" / "Sensor" fallback labels
+        // handle that gracefully.
         return new SensorNodeDto(
                 n.getId().toString(),
                 n.getNodeId(),
@@ -48,9 +56,10 @@ public class SensorService {
                 resolveStatus(level, dead),
                 String.format("%.1f km", dist),
                 List.of(n.getLongitude(), n.getLatitude()),
-                n.getArea()      != null ? n.getArea()     : "Kuching",
-                n.getLocation()  != null ? n.getLocation() : "",
-                n.getState()     != null ? n.getState()    : "Sarawak",
+                n.getArea(),
+                n.getLocation() != null ? n.getLocation() : "",
+                n.getState(),
+                n.getAddress(),
                 level,
                 dead,
                 formatInstant(n.getLastUpdated()),

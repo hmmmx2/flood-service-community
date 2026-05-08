@@ -53,6 +53,12 @@ public class Node {
     @Column(length = 100)
     private String state;
 
+    /** Full reverse-geocoded address from Google Maps. Populated by
+     *  GeocodeBackfillRunner / AdminGeocodingController. Migration 006
+     *  added the column; Hibernate ddl-auto:update keeps it in sync. */
+    @Column(columnDefinition = "TEXT")
+    private String address;
+
     @Column(name = "last_updated")
     private Instant lastUpdated;
 
