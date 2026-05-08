@@ -27,16 +27,23 @@ public class UserFavouriteNode {
     @Column(name = "created_at")
     private Instant createdAt;
 
-    @Column(name = "email_enabled", nullable = false)
+    // The columnDefinition with `DEFAULT true` is critical: Hibernate's
+    // ddl-auto:update can only add a NOT NULL column to a populated table
+    // if the database itself supplies a default — otherwise the ALTER
+    // TABLE silently fails on Postgres and every subsequent SELECT/INSERT
+    // against this entity throws "column does not exist", which is
+    // exactly what surfaced as "An unexpected error occurred" on the
+    // bell-menu PATCH.
+    @Column(name = "email_enabled", nullable = false, columnDefinition = "boolean DEFAULT true")
     private Boolean emailEnabled = Boolean.TRUE;
 
-    @Column(name = "sms_enabled", nullable = false)
+    @Column(name = "sms_enabled", nullable = false, columnDefinition = "boolean DEFAULT true")
     private Boolean smsEnabled = Boolean.TRUE;
 
-    @Column(name = "whatsapp_enabled", nullable = false)
+    @Column(name = "whatsapp_enabled", nullable = false, columnDefinition = "boolean DEFAULT true")
     private Boolean whatsappEnabled = Boolean.TRUE;
 
-    @Column(name = "push_enabled", nullable = false)
+    @Column(name = "push_enabled", nullable = false, columnDefinition = "boolean DEFAULT true")
     private Boolean pushEnabled = Boolean.TRUE;
 
     public UserFavouriteNode(UserFavouriteNodeId id, Instant createdAt) {

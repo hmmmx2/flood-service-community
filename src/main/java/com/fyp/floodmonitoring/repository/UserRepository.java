@@ -35,6 +35,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("UPDATE User u SET u.pushToken = :token WHERE u.id = :id")
     void updatePushToken(UUID id, String token);
 
+    /** Used by the content-moderation fan-out — sends each new report to every staff inbox. */
+    @Query("SELECT u FROM User u WHERE u.role IN ('admin', 'operations_manager')")
+    java.util.List<User> findStaff();
+
     /** Find users who have opted in to email flood alerts. */
     @Query(value = """
             SELECT u.* FROM users u

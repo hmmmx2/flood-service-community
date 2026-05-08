@@ -4,12 +4,15 @@ import com.fyp.floodmonitoring.dto.request.CreateCommunityCommentRequest;
 import com.fyp.floodmonitoring.dto.request.CreateCommunityPostRequest;
 import com.fyp.floodmonitoring.dto.request.CreateGroupRequest;
 import com.fyp.floodmonitoring.dto.request.ModerateCommentRequest;
+import com.fyp.floodmonitoring.dto.request.ReportContentRequest;
 import com.fyp.floodmonitoring.dto.request.UpdateCommunityCommentRequest;
+import com.fyp.floodmonitoring.dto.request.UpdateContentReportRequest;
 import com.fyp.floodmonitoring.dto.request.UpdatePostRequest;
 import com.fyp.floodmonitoring.dto.request.VoteCommentRequest;
 import com.fyp.floodmonitoring.dto.response.*;
 import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.service.CommunityService;
+import com.fyp.floodmonitoring.service.ContentReportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,6 +30,7 @@ import java.util.UUID;
 public class CommunityController {
 
     private final CommunityService communityService;
+    private final ContentReportService contentReportService;
 
     // ══ GROUP ENDPOINTS ═══════════════════════════════════════════════════════
 
@@ -154,6 +158,26 @@ public class CommunityController {
         return ResponseEntity.ok(communityService.voteComment(postId, commentId, requireUserId(auth), req));
     }
 
+    // ══ CONTENT REPORTS (user-facing) ════════════════════════════════════════
+
+    @PostMapping("/posts/{postId}/report")
+    public ResponseEntity<ContentReportDto> reportPost(
+            @PathVariable UUID postId,
+            @Valid @RequestBody ReportContentRequest req,
+            Authentication auth) {
+        return ResponseEntity.ok(contentReportService.reportPost(postId, requireUserId(auth), req));
+    }
+
+    @PostMapping("/posts/{postId}/comments/{commentId}/report")
+    public ResponseEntity<ContentReportDto> reportComment(
+            @PathVariable UUID postId,
+            @PathVariable UUID commentId,
+            @Valid @RequestBody ReportContentRequest req,
+            Authentication auth) {
+        return ResponseEntity.ok(
+                contentReportService.reportComment(postId, commentId, requireUserId(auth), req));
+    }
+
     // ══ ADMIN ENDPOINTS ═══════════════════════════════════════════════════════
 
     @GetMapping("/admin/posts")
@@ -205,6 +229,32 @@ public class CommunityController {
             Authentication auth) {
         communityService.moderateComment(commentId, requireUserId(auth), req);
         return ResponseEntity.noContent().build();
+    }
+
+    // ══ ADMIN: CONTENT MODERATION QUEUE ══════════════════════════════════════
+
+    @GetMapping("/admin/content-reports")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+    public ResponseEntity<Page<ContentReportDto>> listContentReports(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(contentReportService.listForModeration(page, size));
+    }
+
+    @GetMapping("/admin/content-reports/pending-count")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+    public ResponseEntity<java.util.Map<String, Long>> pendingContentReportCount() {
+        return ResponseEntity.ok(java.util.Map.of("count", contentReportService.countPending()));
+    }
+
+    @PatchMapping("/admin/content-reports/{reportId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+    public ResponseEntity<ContentReportDto> updateContentReport(
+            @PathVariable UUID reportId,
+            @Valid @RequestBody UpdateContentReportRequest req,
+            Authentication auth) {
+        return ResponseEntity.ok(
+                contentReportService.updateStatus(reportId, requireUserId(auth), req));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
