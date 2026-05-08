@@ -81,4 +81,41 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     java.util.List<User> findEmailSubscribersForFloodAt(
             @org.springframework.data.repository.query.Param("nodeLat") double nodeLat,
             @org.springframework.data.repository.query.Param("nodeLng") double nodeLng);
+
+    /**
+     * Channel-agnostic recipient resolver for the multichannel dispatcher.
+     * Returns every user who:
+     *   • has at least one of {emailAlerts, smsAlerts, whatsappAlerts,
+     *     inAppAlerts} enabled in user_settings, AND
+     *   • EITHER has no saved-location pins (legacy "all subscribers"
+     *     fallback) OR has a saved location whose centre is within its
+     *     own per-pin alert_radius_km of the alerting sensor.
+     *
+     * The dispatcher then looks up each user's individual channel flags
+     * (and phone) before deciding what to send. Same bounding-box pre-
+     * filter as the email-only query (±0.6° ≈ 66 km).
+     */
+    @Query(value = """
+            SELECT DISTINCT u.* FROM users u
+            INNER JOIN user_settings s ON s.user_id = u.id
+                AND s.key IN ('emailAlerts', 'smsAlerts', 'whatsappAlerts', 'inAppAlerts')
+                AND s.enabled = true
+            WHERE
+              NOT EXISTS (SELECT 1 FROM user_saved_locations l WHERE l.user_id = u.id)
+              OR EXISTS (
+                  SELECT 1 FROM user_saved_locations l
+                  WHERE l.user_id = u.id
+                    AND l.latitude  BETWEEN :nodeLat - 0.6 AND :nodeLat + 0.6
+                    AND l.longitude BETWEEN :nodeLng - 0.6 AND :nodeLng + 0.6
+                    AND (
+                      6371.0 * acos(GREATEST(-1.0, LEAST(1.0,
+                        cos(radians(l.latitude)) * cos(radians(:nodeLat)) *
+                        cos(radians(:nodeLng) - radians(l.longitude)) +
+                        sin(radians(l.latitude)) * sin(radians(:nodeLat)))))
+                    ) <= l.alert_radius_km
+              )
+            """, nativeQuery = true)
+    java.util.List<User> findNotificationSubscribersForFloodAt(
+            @org.springframework.data.repository.query.Param("nodeLat") double nodeLat,
+            @org.springframework.data.repository.query.Param("nodeLng") double nodeLng);
 }

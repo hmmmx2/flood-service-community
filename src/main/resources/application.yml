@@ -127,3 +127,24 @@ google:
     # Suppress duplicate (nodeId, severity) alerts within this window.
     # Override via FLOOD_DEDUP_WINDOW_MINUTES env var on Railway for testing.
     dedup-window-minutes: ${FLOOD_DEDUP_WINDOW_MINUTES:30}
+
+# ── Multichannel notifications (in-app / SMS / WhatsApp) ─────────────────────
+# In-app + SSE always work. SMS + WhatsApp require Twilio credentials —
+# without them, providers log "[Twilio MOCK]" and the app keeps running.
+#
+# Twilio sign-up: https://www.twilio.com (free trial ≈ $15 credit, enough
+# for ~300 SMS to MY numbers). For WhatsApp, the trial uses the sandbox
+# sender "whatsapp:+14155238886" — recipients must opt-in by sending the
+# join code Twilio provides; production needs a verified Business sender.
+notifications:
+  sms:
+    enabled: ${NOTIFY_SMS_ENABLED:false}
+  whatsapp:
+    enabled: ${NOTIFY_WHATSAPP_ENABLED:false}
+  twilio:
+    account-sid: ${TWILIO_ACCOUNT_SID:}
+    auth-token:  ${TWILIO_AUTH_TOKEN:}
+    sms:
+      from:      ${TWILIO_SMS_FROM:}
+    whatsapp:
+      from:      ${TWILIO_WHATSAPP_FROM:whatsapp:+14155238886}

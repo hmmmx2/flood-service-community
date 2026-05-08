@@ -5,6 +5,7 @@ import com.fyp.floodmonitoring.entity.FloodAlert;
 import com.fyp.floodmonitoring.entity.Node;
 import com.fyp.floodmonitoring.event.FloodAlertCreatedEvent;
 import com.fyp.floodmonitoring.repository.NodeRepository;
+import com.fyp.floodmonitoring.service.notifications.NotificationDispatcher;
 import com.fyp.floodmonitoring.sse.SseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ public class FloodAlertFanOutListener {
     private final EmailService            emailService;
     private final SseService              sseService;
     private final NodeRepository          nodeRepository;
+    private final NotificationDispatcher  notificationDispatcher;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -49,18 +51,19 @@ public class FloodAlertFanOutListener {
         pushNotificationService.notifyFloodThreshold(alert);
         sseService.broadcastFloodAlert(FloodAlertDto.from(alert));
 
-        // Look up the alerting node's coordinate so the email path can
-        // filter recipients by their saved-location pin radii. If we
-        // can't find the node row (race / orphaned alert / test data),
-        // fall back to broadcasting to everyone — better an extra email
-        // than a missed flood warning.
+        // Look up the alerting node's coordinate so the email + multichannel
+        // dispatcher can filter recipients by their saved-location pin radii.
+        // If we can't find the node row (race / orphaned alert / test data),
+        // fall back to broadcasting to everyone — better an extra email than
+        // a missed flood warning.
         Node node = nodeRepository.findByNodeId(alert.getNodeId()).orElse(null);
-        if (node != null && node.getLatitude() != null && node.getLongitude() != null) {
-            emailService.sendFloodAlertToAllSubscribers(
-                    alert, node.getLatitude(), node.getLongitude());
-        } else {
-            log.warn("[FanOut] Node not found for nodeId={}, sending to all subscribers", alert.getNodeId());
-            emailService.sendFloodAlertToAllSubscribers(alert, 0.0, 0.0);
+        double lat = (node != null && node.getLatitude()  != null) ? node.getLatitude()  : 0.0;
+        double lng = (node != null && node.getLongitude() != null) ? node.getLongitude() : 0.0;
+        if (node == null) {
+            log.warn("[FanOut] Node not found for nodeId={}, broadcasting to all subscribers", alert.getNodeId());
         }
+
+        emailService.sendFloodAlertToAllSubscribers(alert, lat, lng);
+        notificationDispatcher.dispatchFloodAlert(alert, lat, lng);
     }
 }
