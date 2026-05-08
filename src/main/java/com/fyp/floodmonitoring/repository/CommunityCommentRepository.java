@@ -12,18 +12,24 @@ import java.util.UUID;
 public interface CommunityCommentRepository extends JpaRepository<CommunityComment, UUID> {
 
     /**
-     * Lists all comments for a post, oldest first. Uses an explicit JPQL
-     * with the `c.post.id` path (proven to compile + match the same
-     * syntax {@link #countByPostIdIn} uses), instead of the Spring Data
-     * derived-method name {@code findByPost_IdOrderByCreatedAtAsc} which
-     * was returning empty result-sets on production for some posts.
+     * Lists all comments for a post, oldest first.
+     *
+     * <p>NOTE — must be a NATIVE query, not JPQL. On production we observed
+     * that the JPQL {@code WHERE c.post.id = :postId} returns an empty
+     * result-set for posts whose rows are visible via the working
+     * {@code IN}-batch query {@link #countByPostIdIn}. Bypassing JPQL
+     * navigates straight to the {@code post_id} column and fixes the
+     * "comments disappear on reload" bug.</p>
      */
-    @Query("SELECT c FROM CommunityComment c WHERE c.post.id = :postId ORDER BY c.createdAt ASC")
+    @Query(value = "SELECT * FROM community_comments WHERE post_id = :postId ORDER BY created_at ASC",
+           nativeQuery = true)
     List<CommunityComment> findByPostIdOrderByCreatedAtAsc(@Param("postId") UUID postId);
 
     long countByParent_Id(UUID parentId);
 
-    @Query("SELECT COUNT(c) FROM CommunityComment c WHERE c.post.id = :postId")
+    /** See note on {@link #findByPostIdOrderByCreatedAtAsc(UUID)} — same JPQL bug, same fix. */
+    @Query(value = "SELECT COUNT(*) FROM community_comments WHERE post_id = :postId",
+           nativeQuery = true)
     long countByPost_Id(@Param("postId") UUID postId);
 
     /** Batch comment count for a set of post IDs — avoids N+1 in list views. */
