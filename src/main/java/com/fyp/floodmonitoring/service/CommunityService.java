@@ -138,8 +138,13 @@ public class CommunityService {
             }
         }
 
+        // Always trust the live count from the comments table — the denormalized
+        // community_posts.comments_count drifts whenever a comment is removed
+        // outside the soft-delete path (e.g. parent hard-deleted via FK SET NULL,
+        // manual cleanup, prior bug versions). Falling back to it caused the
+        // listing badge to disagree with the post-detail badge.
         return posts.map(p -> toDto(p, likedIds.contains(p.getId()), null,
-                liveCounts.getOrDefault(p.getId(), p.getCommentsCount())));
+                liveCounts.getOrDefault(p.getId(), 0)));
     }
 
     @Transactional(readOnly = true)

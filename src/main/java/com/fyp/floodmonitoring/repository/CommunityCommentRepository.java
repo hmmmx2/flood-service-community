@@ -32,8 +32,17 @@ public interface CommunityCommentRepository extends JpaRepository<CommunityComme
            nativeQuery = true)
     long countByPost_Id(@Param("postId") UUID postId);
 
-    /** Batch comment count for a set of post IDs — avoids N+1 in list views. */
-    @Query("SELECT c.post.id, COUNT(c) FROM CommunityComment c WHERE c.post.id IN :postIds GROUP BY c.post.id")
+    /**
+     * Batch comment count for a set of post IDs — avoids N+1 in list views.
+     *
+     * <p>Native SQL for the same reason {@link #findByPostIdOrderByCreatedAtAsc}
+     * is native: in production the JPQL form ({@code WHERE c.post.id IN ...})
+     * silently returned an empty result-set, so the listing fell back to
+     * the stale denormalized {@code community_posts.comments_count} and the
+     * listing badge drifted out of sync with the actual rows.</p>
+     */
+    @Query(value = "SELECT post_id, COUNT(*) FROM community_comments WHERE post_id IN (:postIds) GROUP BY post_id",
+           nativeQuery = true)
     List<Object[]> countByPostIdIn(@Param("postIds") Collection<UUID> postIds);
 
     /** Admin moderation list — newest first */
