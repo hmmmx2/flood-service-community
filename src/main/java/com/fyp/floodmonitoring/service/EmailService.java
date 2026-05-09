@@ -257,7 +257,7 @@ public class EmailService {
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromAddress);
+            message.setFrom(senders.headerFor(EmailSenderResolver.BROADCAST));
             message.setTo(toEmail);
             message.setSubject("[Flood Alert] " + title);
             message.setText(body + "\n\n— Flood Monitor System");
