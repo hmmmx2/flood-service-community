@@ -37,9 +37,7 @@ public class EmailService {
     private final JavaMailSender              mailSender;
     private final UserRepository              userRepository;
     private final UserFavouriteNodeRepository favRepository;
-
-    @Value("${app.email.from-address}")
-    private String fromAddress;
+    private final EmailSenderResolver         senders;
 
     @Value("${app.email.resend-api-key}")
     private String resendApiKey;
@@ -91,7 +89,7 @@ public class EmailService {
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromAddress);
+            message.setFrom(senders.headerFor(EmailSenderResolver.PASSWORD_RESET));
             message.setTo(actualRecipient);
             message.setSubject(subject);
             message.setText(body);
@@ -133,7 +131,7 @@ public class EmailService {
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromAddress);
+            message.setFrom(senders.headerFor(EmailSenderResolver.REGISTRATION));
             message.setTo(actualRecipient);
             message.setSubject(subject);
             message.setText(body);
@@ -189,7 +187,7 @@ public class EmailService {
                 }
                 MimeMessage mime = mailSender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(mime, false, "UTF-8");
-                helper.setFrom(fromAddress);
+                helper.setFrom(senders.addressFor(EmailSenderResolver.FLOOD_ALERT));
                 helper.setTo(recipient);
                 helper.setSubject(subject);
                 helper.setText(buildFloodAlertHtml(user, alert, feet), true);
