@@ -5,61 +5,36 @@ import com.fyp.floodmonitoring.entity.User;
 import com.fyp.floodmonitoring.entity.UserFavouriteNode;
 import com.fyp.floodmonitoring.repository.UserFavouriteNodeRepository;
 import com.fyp.floodmonitoring.repository.UserRepository;
-import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 /**
- * Sends transactional emails via Resend's SMTP relay.
- *
- * Behaviour:
- *   - RESEND_API_KEY is set (production)  → sends a real email through smtp.resend.com
- *   - RESEND_API_KEY is empty (dev/local) → logs the email body to console instead
- *
- * Wiring:
- *   application.yml configures spring.mail.* to point at smtp.resend.com:465.
- *   The SMTP password is the Resend API key.
+ * Sends transactional emails through Resend's HTTP API. The previous SMTP
+ * path via smtp.resend.com:465 silently failed on Railway, so this class
+ * now goes through {@link ResendHttpClient} which posts directly to
+ * https://api.resend.com/emails — the same path the diagnostic probes used.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailService {
 
-    private final JavaMailSender              mailSender;
     private final UserRepository              userRepository;
     private final UserFavouriteNodeRepository favRepository;
     private final EmailSenderResolver         senders;
+    private final ResendHttpClient            resend;
 
-    @Value("${app.email.resend-api-key}")
-    private String resendApiKey;
-
-    /**
-     * In development mode, all outgoing emails are redirected to this address.
-     * Resend's test domain (onboarding@resend.dev) only permits sending to
-     * your own verified email — set DEV_EMAIL_RECIPIENT in .env to your Gmail.
-     */
     @Value("${app.email.dev-recipient:}")
     private String devRecipient;
 
     @Value("${app.environment:development}")
     private String environment;
 
-    /**
-     * Sends a password-reset verification code to the user's email address.
-     * Runs asynchronously so the /forgot-password endpoint returns immediately.
-     *
-     * @param toEmail recipient email
-     * @param code    6-digit verification code
-     */
     @Async
     public void sendPasswordResetCode(String toEmail, String code) {
         String subject = "Your Flood Monitor password reset code";
@@ -73,40 +48,10 @@ public class EmailService {
                 "— Flood Monitor Team",
                 code);
 
-        if (resendApiKey == null || resendApiKey.isBlank()) {
-            // No API key at all — log code to console for local dev
-            log.info("[Email DEV] To={} Subject='{}' Code={}", toEmail, subject, code);
-            return;
-        }
-
-        // In development, Resend's onboarding@resend.dev test domain only allows
-        // sending to your own verified email. Redirect all emails to DEV_EMAIL_RECIPIENT.
-        String actualRecipient = toEmail;
-        if ("development".equals(environment) && devRecipient != null && !devRecipient.isBlank()) {
-            log.info("[Email DEV] Redirecting email from {} → {} (dev mode)", toEmail, devRecipient);
-            actualRecipient = devRecipient;
-        }
-
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(senders.headerFor(EmailSenderResolver.PASSWORD_RESET));
-            message.setTo(actualRecipient);
-            message.setSubject(subject);
-            message.setText(body);
-            mailSender.send(message);
-            log.info("[Email] Password reset code sent to {} (intended: {})", actualRecipient, toEmail);
-        } catch (MailException e) {
-            // Log but don't rethrow — the reset code is still valid, user can retry
-            log.error("[Email] Failed to send reset email to {}: {}", actualRecipient, e.getMessage());
-        }
+        String recipient = resolveRecipient(toEmail);
+        resend.sendText(senders.headerFor(EmailSenderResolver.PASSWORD_RESET), recipient, subject, body);
     }
 
-    /**
-     * Sends a 6-digit registration verification code so a new user can
-     * prove ownership of the email they signed up with. Mirrors
-     * {@link #sendPasswordResetCode(String, String)} — same dev-mode
-     * fallback (logs to console when the Resend API key is unset).
-     */
     @Async
     public void sendRegistrationCode(String toEmail, String code) {
         String subject = "Verify your Flood Monitor account";
@@ -118,44 +63,15 @@ public class EmailService {
                 "— Flood Monitor Team",
                 code);
 
-        if (resendApiKey == null || resendApiKey.isBlank()) {
-            log.info("[Email DEV] To={} Subject='{}' RegisterCode={}", toEmail, subject, code);
-            return;
-        }
-
-        String actualRecipient = toEmail;
-        if ("development".equals(environment) && devRecipient != null && !devRecipient.isBlank()) {
-            log.info("[Email DEV] Redirecting registration email from {} → {} (dev mode)", toEmail, devRecipient);
-            actualRecipient = devRecipient;
-        }
-
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(senders.headerFor(EmailSenderResolver.REGISTRATION));
-            message.setTo(actualRecipient);
-            message.setSubject(subject);
-            message.setText(body);
-            mailSender.send(message);
-            log.info("[Email] Registration code sent to {} (intended: {})", actualRecipient, toEmail);
-        } catch (MailException e) {
-            log.error("[Email] Failed to send registration email to {}: {}", actualRecipient, e.getMessage());
-        }
+        String recipient = resolveRecipient(toEmail);
+        resend.sendText(senders.headerFor(EmailSenderResolver.REGISTRATION), recipient, subject, body);
     }
 
-    /**
-     * Sends a flood alert email to users who have email_alerts enabled
-     * AND who are either (a) without any saved-location pins (legacy
-     * "all subscribers" path), or (b) within at least one of their pins'
-     * alert radii of this sensor. Caller passes the sensor coordinate.
-     *
-     * Runs asynchronously — called from FloodAlertFanOutListener.
-     */
     @Async
     public void sendFloodAlertToAllSubscribers(FloodAlert alert, double nodeLat, double nodeLng) {
         List<User> subscribers = userRepository.findEmailSubscribersForFloodAt(nodeLat, nodeLng);
         if (subscribers.isEmpty()) {
-            log.debug("[Email] No email subscribers in range for flood alert nodeId={}",
-                    alert.getNodeId());
+            log.debug("[Email] No email subscribers in range for flood alert nodeId={}", alert.getNodeId());
             return;
         }
 
@@ -165,11 +81,9 @@ public class EmailService {
             case WARNING  -> "[FloodWatch] ⚠ Flood Warning: " + alert.getNodeName();
             case CRITICAL -> "[FloodWatch] 🆘 CRITICAL FLOOD ALERT: " + alert.getNodeName();
         };
+        String fromHeader = senders.headerFor(EmailSenderResolver.FLOOD_ALERT);
 
         for (User user : subscribers) {
-            // Per-favourite override: if the user has a favourite for this
-            // sensor with emailEnabled=false, skip — they've explicitly
-            // muted email for this specific node.
             UserFavouriteNode fav = favRepository
                     .findByUserIdAndBusinessNodeId(user.getId(), alert.getNodeId())
                     .orElse(null);
@@ -180,29 +94,24 @@ public class EmailService {
             }
 
             String recipient = resolveRecipient(user.getEmail());
-            try {
-                if (resendApiKey == null || resendApiKey.isBlank()) {
-                    log.info("[Email DEV] Flood alert to={} subject='{}'", recipient, subject);
-                    continue;
-                }
-                MimeMessage mime = mailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(mime, false, "UTF-8");
-                helper.setFrom(senders.addressFor(EmailSenderResolver.FLOOD_ALERT));
-                helper.setTo(recipient);
-                helper.setSubject(subject);
-                helper.setText(buildFloodAlertHtml(user, alert, feet), true);
-                mailSender.send(mime);
-                log.debug("[Email] Flood alert sent to {} (intended: {})", recipient, user.getEmail());
-            } catch (Exception e) {
-                log.error("[Email] Failed to send flood alert to {}: {}", recipient, e.getMessage());
-            }
+            resend.sendHtml(fromHeader, recipient, subject, buildFloodAlertHtml(user, alert, feet));
         }
         log.info("[Email] Flood alert dispatched to {} subscribers nodeId={} severity={}",
                 subscribers.size(), alert.getNodeId(), alert.getSeverity());
     }
 
+    @Async
+    public void sendBroadcastAlert(String toEmail, String title, String body) {
+        resend.sendText(
+                senders.headerFor(EmailSenderResolver.BROADCAST),
+                resolveRecipient(toEmail),
+                "[Flood Alert] " + title,
+                body + "\n\n— Flood Monitor System");
+    }
+
     private String resolveRecipient(String originalEmail) {
         if ("development".equals(environment) && devRecipient != null && !devRecipient.isBlank()) {
+            log.info("[Email DEV] Redirecting from {} → {} (dev mode)", originalEmail, devRecipient);
             return devRecipient;
         }
         return originalEmail;
@@ -242,28 +151,5 @@ public class EmailService {
                 alert.getNodeName(), alert.getSeverity().name(),
                 feet, alert.getWaterLevelMeters(),
                 zoneRow);
-    }
-
-    /**
-     * Sends a broadcast alert email.
-     * Currently used for admin notification only — push notifications handle mobile users.
-     */
-    @Async
-    public void sendBroadcastAlert(String toEmail, String title, String body) {
-        if (resendApiKey == null || resendApiKey.isBlank()) {
-            log.info("[Email DEV] Broadcast to={} title='{}'", toEmail, title);
-            return;
-        }
-
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(senders.headerFor(EmailSenderResolver.BROADCAST));
-            message.setTo(toEmail);
-            message.setSubject("[Flood Alert] " + title);
-            message.setText(body + "\n\n— Flood Monitor System");
-            mailSender.send(message);
-        } catch (MailException e) {
-            log.error("[Email] Failed to send broadcast email to {}: {}", toEmail, e.getMessage());
-        }
     }
 }
