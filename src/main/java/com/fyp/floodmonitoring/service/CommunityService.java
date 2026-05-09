@@ -324,7 +324,12 @@ public class CommunityService {
 
         CommunityComment parent = null;
         if (req.parentId() != null && !req.parentId().isBlank()) {
-            UUID parentId = UUID.fromString(req.parentId().trim());
+            UUID parentId;
+            try {
+                parentId = UUID.fromString(req.parentId().trim());
+            } catch (IllegalArgumentException ex) {
+                throw AppException.badRequest("INVALID_PARENT", "Parent comment id is not a valid UUID");
+            }
             parent = commentRepo.findById(parentId)
                     .orElseThrow(() -> AppException.notFound("Parent comment not found"));
             if (!parent.getPost().getId().equals(postId)) {
@@ -341,8 +346,14 @@ public class CommunityService {
                 .parent(parent)
                 .content(req.content().trim())
                 .build();
-        comment = commentRepo.save(comment);
+        // saveAndFlush guarantees the INSERT hits the DB inside this transaction
+        // before any subsequent bulk UPDATE / persistence-context manipulation can
+        // discard it. Plain save() left the INSERT pending; combined with the old
+        // adjustComments(clearAutomatically=true) that silently dropped the row.
+        comment = commentRepo.saveAndFlush(comment);
         postRepo.adjustComments(postId, 1);
+        log.info("[Community] Saved comment id={} postId={} authorId={} parentId={}",
+                comment.getId(), postId, userId, parent != null ? parent.getId() : null);
 
         // Notify the post author when someone comments on their post,
         // and notify the parent comment's author when someone replies
@@ -422,9 +433,10 @@ public class CommunityService {
         }
         c.setContent(req.content().trim());
         c.setUpdatedAt(Instant.now());
-        c = commentRepo.save(c);
+        c = commentRepo.saveAndFlush(c);
         int replies = (int) commentRepo.countByParent_Id(c.getId());
         int myVote = voteRepo.findByComment_IdAndUser_Id(c.getId(), userId).map(CommunityCommentVote::getValue).orElse(0);
+        log.info("[Community] Edited comment id={} postId={} authorId={}", c.getId(), postId, userId);
         return toCommentDto(c, myVote, replies);
     }
 
@@ -561,7 +573,8 @@ public class CommunityService {
 
     private void softOrHardDelete(CommunityComment c, User deletedBy, boolean isAdmin) {
         UUID postId = c.getPost().getId();
-        long children = commentRepo.countByParent_Id(c.getId());
+        UUID commentId = c.getId();
+        long children = commentRepo.countByParent_Id(commentId);
         if (children > 0) {
             // Soft delete — keep row so children stay intact, but clear content
             if (c.getContent() != null && !c.getContent().isEmpty()) {
@@ -570,10 +583,14 @@ public class CommunityService {
             c.setContent("");
             c.setDeletedAt(Instant.now());
             c.setDeletedBy(deletedBy);
-            commentRepo.save(c);
+            commentRepo.saveAndFlush(c);
+            log.info("[Community] Soft-deleted comment id={} postId={} (kept {} children)",
+                    commentId, postId, children);
         } else {
-            voteRepo.deleteByComment_Id(c.getId());
+            voteRepo.deleteByComment_Id(commentId);
             commentRepo.delete(c);
+            commentRepo.flush();
+            log.info("[Community] Hard-deleted comment id={} postId={}", commentId, postId);
         }
         // Always decrement the cached counter regardless of soft vs hard delete
         postRepo.adjustComments(postId, -1);
