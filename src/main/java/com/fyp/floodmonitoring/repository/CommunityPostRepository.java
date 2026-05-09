@@ -20,6 +20,10 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, UU
     Page<CommunityPost> findByGroupIdOrderByCreatedAtDesc(UUID groupId, Pageable pageable);
     Page<CommunityPost> findByGroupIdOrderByLikesCountDescCreatedAtDesc(UUID groupId, Pageable pageable);
 
+    // Per-user profile feed — paginated newest-first.
+    Page<CommunityPost> findByAuthor_IdOrderByCreatedAtDesc(UUID authorId, Pageable pageable);
+    long countByAuthor_Id(UUID authorId);
+
     // Full-text search (title + content, case-insensitive)
     @Query("SELECT p FROM CommunityPost p WHERE " +
            "LOWER(p.title) LIKE LOWER(CONCAT('%', :q, '%')) OR " +

@@ -27,6 +27,11 @@ public interface CommunityCommentRepository extends JpaRepository<CommunityComme
 
     long countByParent_Id(UUID parentId);
 
+    /** Profile-page metric — total comments authored by a user across all posts. */
+    @Query(value = "SELECT COUNT(*) FROM community_comments WHERE user_id = :authorId AND deleted_at IS NULL",
+           nativeQuery = true)
+    long countActiveByAuthorId(@Param("authorId") UUID authorId);
+
     /** See note on {@link #findByPostIdOrderByCreatedAtAsc(UUID)} — same JPQL bug, same fix. */
     @Query(value = "SELECT COUNT(*) FROM community_comments WHERE post_id = :postId",
            nativeQuery = true)

@@ -30,7 +30,9 @@ public class CommunityService {
     private final CommunityGroupRepository groupRepo;
     private final CommunityGroupMemberRepository memberRepo;
     private final UserRepository userRepo;
+    private final UserSettingRepository userSettingRepo;
     private final InAppProvider inAppProvider;
+    private final EmailService emailService;
 
     // ── Groups ────────────────────────────────────────────────────────────────
 
@@ -91,6 +93,47 @@ public class CommunityService {
             groupRepo.adjustMembers(group.getId(), 1);
             return toGroupDto(group, true);
         }
+    }
+
+    // ── Public user profile ───────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public PublicUserProfileDto getPublicUserProfile(UUID userId) {
+        User u = userRepo.findById(userId)
+                .orElseThrow(() -> AppException.notFound("User not found"));
+        long posts = postRepo.countByAuthor_Id(userId);
+        long comments = commentRepo.countActiveByAuthorId(userId);
+        return new PublicUserProfileDto(
+                u.getId().toString(),
+                displayName(u),
+                u.getAvatarUrl(),
+                u.getRole(),
+                u.getCreatedAt(),
+                posts,
+                comments);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CommunityPostDto> listPostsByUser(UUID authorId, UUID viewerId, int page, int size) {
+        if (!userRepo.existsById(authorId)) {
+            throw AppException.notFound("User not found");
+        }
+        PageRequest pageable = PageRequest.of(page, Math.min(size, 50));
+        Page<CommunityPost> posts = postRepo.findByAuthor_IdOrderByCreatedAtDesc(authorId, pageable);
+
+        Set<UUID> likedIds = viewerId != null
+                ? Set.copyOf(likeRepo.findPostIdByUserId(viewerId))
+                : Set.of();
+
+        List<UUID> postIds = posts.getContent().stream().map(CommunityPost::getId).toList();
+        Map<UUID, Integer> liveCounts = new HashMap<>();
+        if (!postIds.isEmpty()) {
+            for (Object[] row : commentRepo.countByPostIdIn(postIds)) {
+                liveCounts.put((UUID) row[0], ((Long) row[1]).intValue());
+            }
+        }
+        return posts.map(p -> toDto(p, likedIds.contains(p.getId()), null,
+                liveCounts.getOrDefault(p.getId(), 0)));
     }
 
     // ── Posts ─────────────────────────────────────────────────────────────────
@@ -367,16 +410,21 @@ public class CommunityService {
             if (parent == null) {
                 User postAuthor = post.getAuthor();
                 if (postAuthor != null && !postAuthor.getId().equals(userId)) {
+                    String commentDeepLink = postLink + "#comment-" + comment.getId();
                     inAppProvider.deliver(postAuthor.getId(), new NotificationPayload(
                             "community.comment",
                             "info",
                             authorName + " commented on \"" + truncate(post.getTitle(), 60) + "\"",
                             snippet,
                             null,
-                            postLink));
+                            commentDeepLink));
+                    maybeSendInteractionEmail(postAuthor, authorName,
+                            "commented on your post", snippet,
+                            post.getTitle(), commentDeepLink);
                 }
             } else {
                 User parentAuthor = parent.getAuthor();
+                String replyDeepLink = postLink + "#comment-" + comment.getId();
                 if (parentAuthor != null && !parentAuthor.getId().equals(userId)) {
                     inAppProvider.deliver(parentAuthor.getId(), new NotificationPayload(
                             "community.reply",
@@ -384,7 +432,10 @@ public class CommunityService {
                             authorName + " replied to your comment",
                             snippet,
                             null,
-                            postLink + "/comment/" + comment.getId()));
+                            replyDeepLink));
+                    maybeSendInteractionEmail(parentAuthor, authorName,
+                            "replied to your comment", snippet,
+                            post.getTitle(), replyDeepLink);
                 }
                 // Also let the post author know their thread is active —
                 // unless they are the replier or already the parent author.
@@ -398,7 +449,10 @@ public class CommunityService {
                             "New reply on \"" + truncate(post.getTitle(), 60) + "\"",
                             snippet,
                             null,
-                            postLink));
+                            replyDeepLink));
+                    maybeSendInteractionEmail(postAuthor, authorName,
+                            "replied on your post", snippet,
+                            post.getTitle(), replyDeepLink);
                 }
             }
         } catch (Exception e) {
@@ -416,6 +470,30 @@ public class CommunityService {
 
     private static String trimSnippet(String s) {
         return truncate(s == null ? "" : s.replaceAll("\\s+", " ").trim(), 140);
+    }
+
+    /**
+     * Sends a "someone interacted with your content" email if the recipient
+     * has emailAlerts enabled. Best-effort — exceptions are swallowed so an
+     * email failure can never affect the comment transaction. The actual
+     * Resend HTTP call already runs @Async; the gating check is cheap.
+     */
+    private void maybeSendInteractionEmail(
+            User recipient, String actorName, String verb,
+            String snippet, String postTitle, String relativePath) {
+        try {
+            if (recipient == null || recipient.getEmail() == null || recipient.getEmail().isBlank()) return;
+            boolean wantsEmail = userSettingRepo
+                    .findByUserIdAndKey(recipient.getId(), "emailAlerts")
+                    .map(s -> Boolean.TRUE.equals(s.getEnabled()))
+                    .orElse(true); // opt-out model — default ON until the user disables it
+            if (!wantsEmail) return;
+            emailService.sendSocialInteractionEmail(
+                    recipient.getEmail(), actorName, verb, snippet, postTitle, relativePath);
+        } catch (Exception e) {
+            log.warn("[Community] Failed to dispatch interaction email to userId={}: {}",
+                    recipient != null ? recipient.getId() : null, e.getMessage());
+        }
     }
 
     @Transactional

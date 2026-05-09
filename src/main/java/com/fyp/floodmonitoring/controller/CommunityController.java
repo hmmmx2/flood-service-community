@@ -67,6 +67,24 @@ public class CommunityController {
         return ResponseEntity.ok(communityService.toggleMembership(slug, requireUserId(auth)));
     }
 
+    // ══ PUBLIC USER PROFILE ═══════════════════════════════════════════════════
+    // /community/users/{userId}        — header (avatar, name, joined, counts)
+    // /community/users/{userId}/posts  — paginated posts authored by that user
+
+    @GetMapping("/users/{userId}")
+    public ResponseEntity<PublicUserProfileDto> getPublicProfile(@PathVariable UUID userId) {
+        return ResponseEntity.ok(communityService.getPublicUserProfile(userId));
+    }
+
+    @GetMapping("/users/{userId}/posts")
+    public ResponseEntity<Page<CommunityPostDto>> getUserPosts(
+            @PathVariable UUID userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            Authentication auth) {
+        return ResponseEntity.ok(communityService.listPostsByUser(userId, resolveUserId(auth), page, size));
+    }
+
     // ══ POST ENDPOINTS ════════════════════════════════════════════════════════
 
     @GetMapping("/posts")
