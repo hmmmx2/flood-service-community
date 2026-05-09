@@ -145,6 +145,13 @@ public class NotificationDispatcher {
         String smsBody = String.format(
                 "FloodWatch %s — %s @ %.1f ft. Stay safe.",
                 severityLabel, node, feet);
-        return new NotificationPayload(kind, tone, title, body, smsBody, "/flood-map");
+        // Deep-link to the specific sensor on the flood map so clicking
+        // the bell row pans + zooms to the node that fired the alert.
+        // The community frontend reads ?node= and the CRM /map reads the
+        // same param, so one link works for both web surfaces.
+        String link = alert.getNodeId() != null
+                ? "/flood-map?node=" + alert.getNodeId()
+                : "/flood-map";
+        return new NotificationPayload(kind, tone, title, body, smsBody, link);
     }
 }
