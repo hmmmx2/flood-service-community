@@ -222,6 +222,19 @@ public class AuthService {
         }
 
         User user = userOpt.get();
+
+        // Privileged accounts cannot self-reset via the public email
+        // flow — admin email compromise is the easiest path to an
+        // account takeover, so admins must change their password
+        // through the authenticated /auth/change-password endpoint.
+        // Silent log + null return so the response shape doesn't
+        // betray the role.
+        String role = user.getRole() != null ? user.getRole().toLowerCase() : "";
+        if ("admin".equals(role) || "operations_manager".equals(role)) {
+            log.warn("[Auth] Forgot-password blocked for privileged role={} email={}", role, email);
+            return null;
+        }
+
         resetCodeRepository.invalidateAllForUser(user.getId());
 
         String code = String.format("%06d", new Random().nextInt(900000) + 100000);
@@ -269,6 +282,16 @@ public class AuthService {
         String email = req.email().toLowerCase().trim();
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> AppException.notFound("Account not found"));
+
+        // Mirror the forgotPassword guard at the redemption step.
+        // Catches the edge case where a code was minted before the
+        // user got promoted to admin / operations_manager.
+        String role = user.getRole() != null ? user.getRole().toLowerCase() : "";
+        if ("admin".equals(role) || "operations_manager".equals(role)) {
+            log.warn("[Auth] Reset-password blocked for privileged role={} email={}", role, email);
+            throw AppException.forbidden(
+                "Privileged accounts must change their password while signed in.");
+        }
 
         PasswordResetCode record = resetCodeRepository
                 .findLatestVerifiedUnused(user.getId())

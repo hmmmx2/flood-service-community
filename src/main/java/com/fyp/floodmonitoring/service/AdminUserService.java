@@ -70,7 +70,7 @@ public class AdminUserService {
     // ── Update user ───────────────────────────────────────────────────────────
 
     @Transactional
-    public AdminUserDto updateUser(UUID id, UpdateAdminUserRequest req) {
+    public AdminUserDto updateUser(UUID id, UUID requesterId, UpdateAdminUserRequest req) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> AppException.notFound("User not found"));
 
@@ -81,7 +81,20 @@ public class AdminUserService {
             user.setLastName(req.lastName().trim());
         }
         if (req.role() != null && !req.role().isBlank()) {
-            user.setRole(Role.fromString(req.role()).getPersistenceValue());
+            String newRole = Role.fromString(req.role()).getPersistenceValue();
+            String currentRole = user.getRole() != null ? user.getRole() : "";
+
+            // Self-modification guard — same as flood-service-crm. A
+            // user cannot change their own role under any circumstance.
+            // Demoting yourself is the most common way to lock a tenant
+            // out of /admin/* and is never intentional even when it is
+            // — separation of duty says role changes must come from
+            // another admin.
+            if (id.equals(requesterId) && !currentRole.equalsIgnoreCase(newRole)) {
+                throw AppException.forbidden(
+                    "You cannot change your own role. Ask another administrator.");
+            }
+            user.setRole(newRole);
         }
 
         user = userRepository.save(user);
@@ -91,9 +104,14 @@ public class AdminUserService {
     // ── Delete user ───────────────────────────────────────────────────────────
 
     @Transactional
-    public void deleteUser(UUID id) {
+    public void deleteUser(UUID id, UUID requesterId) {
         if (!userRepository.existsById(id)) {
             throw AppException.notFound("User not found");
+        }
+        // Symmetric self-protection — you can't delete yourself.
+        if (id.equals(requesterId)) {
+            throw AppException.forbidden(
+                "You cannot delete your own account from this UI. Ask another administrator.");
         }
         refreshTokenRepository.deleteAllByUserId(id);
         settingRepository.deleteByUserId(id);
