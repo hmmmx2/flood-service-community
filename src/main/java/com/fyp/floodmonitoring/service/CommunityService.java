@@ -9,6 +9,7 @@ import com.fyp.floodmonitoring.service.notifications.InAppProvider;
 import com.fyp.floodmonitoring.service.notifications.NotificationPayload;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -339,6 +340,14 @@ public class CommunityService {
         postRepo.delete(post);
     }
 
+    /**
+     * Idempotent like toggle. Catches the composite-PK unique violation so
+     * concurrent clicks from the same user (double-tap, network retry,
+     * two browser tabs) don't surface as a 500. Whichever transaction
+     * wins the insert "owns" the side-effect; the loser silently treats
+     * the conflict as "already liked, nothing more to do" and returns the
+     * canonical count from the database.
+     */
     @Transactional
     public LikeToggleDto toggleLike(UUID postId, UUID userId) {
         CommunityPost post = postRepo.findById(postId)
@@ -349,10 +358,17 @@ public class CommunityService {
             likeRepo.deleteByPostIdAndUserId(postId, userId);
             postRepo.adjustLikes(postId, -1);
             return new LikeToggleDto(false, Math.max(0, currentCount - 1));
-        } else {
+        }
+        try {
             likeRepo.save(CommunityPostLike.builder().postId(postId).userId(userId).build());
             postRepo.adjustLikes(postId, 1);
             return new LikeToggleDto(true, currentCount + 1);
+        } catch (DataIntegrityViolationException e) {
+            // Another concurrent click already inserted the row — treat
+            // this side as a no-op and return the canonical state.
+            log.debug("[Community] toggleLike race for postId={} userId={} — treated as already liked",
+                    postId, userId);
+            return new LikeToggleDto(true, Math.max(0, currentCount));
         }
     }
 
@@ -383,11 +399,27 @@ public class CommunityService {
             }
         }
 
+        String content = req.content().trim();
+
+        // Soft duplicate-comment guard. If the same user posted the exact
+        // same content on this post within the last 10 seconds, reject as
+        // a probable double-tap or "spam Enter" attack. The rate limiter
+        // catches volume; this catches the "spam Enter, same text" case
+        // that doesn't trip the per-minute window because it's only one
+        // duplicate per accidental click.
+        commentRepo.findMostRecentByAuthorOnPost(postId, userId, 10)
+                .filter(prev -> content.equals(prev.getContent()))
+                .ifPresent(prev -> {
+                    throw AppException.tooManyRequests(
+                            "DUPLICATE_COMMENT",
+                            "You just posted that. Wait a few seconds before sending again.");
+                });
+
         CommunityComment comment = CommunityComment.builder()
                 .post(post)
                 .author(author)
                 .parent(parent)
-                .content(req.content().trim())
+                .content(content)
                 .build();
         // saveAndFlush guarantees the INSERT hits the DB inside this transaction
         // before any subsequent bulk UPDATE / persistence-context manipulation can
@@ -555,11 +587,21 @@ public class CommunityService {
         } else {
             CommunityCommentVote existing = voteRepo.findByComment_IdAndUser_Id(commentId, userId).orElse(null);
             if (existing == null) {
-                voteRepo.save(CommunityCommentVote.builder()
-                        .comment(c)
-                        .user(voter)
-                        .value(value)
-                        .build());
+                try {
+                    voteRepo.save(CommunityCommentVote.builder()
+                            .comment(c)
+                            .user(voter)
+                            .value(value)
+                            .build());
+                } catch (DataIntegrityViolationException e) {
+                    // Another concurrent click already inserted the vote.
+                    // Read it back and update with the latest value instead.
+                    CommunityCommentVote latest = voteRepo
+                            .findByComment_IdAndUser_Id(commentId, userId)
+                            .orElseThrow(() -> e);
+                    latest.setValue(value);
+                    voteRepo.save(latest);
+                }
             } else {
                 existing.setValue(value);
                 voteRepo.save(existing);

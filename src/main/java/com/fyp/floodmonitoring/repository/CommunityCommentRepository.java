@@ -53,4 +53,20 @@ public interface CommunityCommentRepository extends JpaRepository<CommunityComme
     /** Admin moderation list — newest first */
     org.springframework.data.domain.Page<CommunityComment> findAllByOrderByCreatedAtDesc(
             org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Looks up the most recent comment this user authored on the given
+     * post inside the last {@code sinceSeconds}. Used by the soft
+     * duplicate-comment guard so we can reject "spam Enter" submissions
+     * where the body is identical and the timestamp is seconds apart.
+     */
+    @Query(value = "SELECT * FROM community_comments " +
+                   "WHERE post_id = :postId AND user_id = :userId " +
+                   "  AND created_at > NOW() - make_interval(secs => :sinceSeconds) " +
+                   "ORDER BY created_at DESC LIMIT 1",
+           nativeQuery = true)
+    java.util.Optional<CommunityComment> findMostRecentByAuthorOnPost(
+            @Param("postId") UUID postId,
+            @Param("userId") UUID userId,
+            @Param("sinceSeconds") int sinceSeconds);
 }

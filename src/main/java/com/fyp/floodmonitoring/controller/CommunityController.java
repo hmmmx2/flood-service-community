@@ -11,6 +11,7 @@ import com.fyp.floodmonitoring.dto.request.UpdatePostRequest;
 import com.fyp.floodmonitoring.dto.request.VoteCommentRequest;
 import com.fyp.floodmonitoring.dto.response.*;
 import com.fyp.floodmonitoring.exception.AppException;
+import com.fyp.floodmonitoring.security.ratelimit.RateLimit;
 import com.fyp.floodmonitoring.service.CommunityService;
 import com.fyp.floodmonitoring.service.ContentReportService;
 import jakarta.validation.Valid;
@@ -109,6 +110,7 @@ public class CommunityController {
     }
 
     @PostMapping("/posts")
+    @RateLimit(key = "community.posts.create", perMinute = 3, perHour = 10, perDay = 30)
     public ResponseEntity<CommunityPostDto> createPost(
             @Valid @RequestBody CreateCommunityPostRequest req, Authentication auth) {
         return ResponseEntity.ok(communityService.createPost(requireUserId(auth), req));
@@ -129,6 +131,7 @@ public class CommunityController {
     }
 
     @PostMapping("/posts/{id}/like")
+    @RateLimit(key = "community.posts.like", perMinute = 30, perHour = 300)
     public ResponseEntity<LikeToggleDto> toggleLike(@PathVariable UUID id, Authentication auth) {
         return ResponseEntity.ok(communityService.toggleLike(id, requireUserId(auth)));
     }
@@ -144,6 +147,7 @@ public class CommunityController {
     }
 
     @PostMapping("/posts/{id}/comments")
+    @RateLimit(key = "community.comments.create", perMinute = 10, perHour = 100)
     public ResponseEntity<CommunityCommentDto> addComment(
             @PathVariable UUID id,
             @Valid @RequestBody CreateCommunityCommentRequest req,
@@ -168,6 +172,7 @@ public class CommunityController {
     }
 
     @PostMapping("/posts/{postId}/comments/{commentId}/vote")
+    @RateLimit(key = "community.comments.vote", perMinute = 30, perHour = 300)
     public ResponseEntity<CommentVoteResponseDto> voteOnComment(
             @PathVariable UUID postId,
             @PathVariable UUID commentId,
@@ -179,6 +184,7 @@ public class CommunityController {
     // ══ CONTENT REPORTS (user-facing) ════════════════════════════════════════
 
     @PostMapping("/posts/{postId}/report")
+    @RateLimit(key = "community.reports", perMinute = 3, perHour = 10)
     public ResponseEntity<ContentReportDto> reportPost(
             @PathVariable UUID postId,
             @Valid @RequestBody ReportContentRequest req,
@@ -187,6 +193,7 @@ public class CommunityController {
     }
 
     @PostMapping("/posts/{postId}/comments/{commentId}/report")
+    @RateLimit(key = "community.reports", perMinute = 3, perHour = 10)
     public ResponseEntity<ContentReportDto> reportComment(
             @PathVariable UUID postId,
             @PathVariable UUID commentId,
