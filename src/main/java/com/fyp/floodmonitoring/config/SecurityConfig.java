@@ -1,5 +1,6 @@
 package com.fyp.floodmonitoring.config;
 
+import com.fyp.floodmonitoring.security.InternalApiKeyFilter;
 import com.fyp.floodmonitoring.security.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final InternalApiKeyFilter internalApiKeyFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -58,8 +60,6 @@ public class SecurityConfig {
                     "/auth/resend-verification",
                     "/ingest").permitAll()         // IoT devices — API-key validated in controller
                 .requestMatchers(HttpMethod.GET,
-                    "/sensors",
-                    "/sensors/**",
                     "/blogs",
                     "/blogs/**",
                     "/safety",
@@ -70,8 +70,21 @@ public class SecurityConfig {
                     "/community/groups/**",
                     "/flood-alerts",
                     "/flood-alerts/active").permitAll()  // public read
+                // Sensor coordinates are sensitive (each node is expensive
+                // hardware). The Next.js BFF aggregates them into zones
+                // before serving to browsers; the BFF authenticates with
+                // a shared X-Internal-Key header (see InternalApiKeyFilter).
+                // Internal admin tools also reach /sensors via JWT.
+                .requestMatchers(HttpMethod.GET,
+                    "/sensors",
+                    "/sensors/**").authenticated()
                 .requestMatchers("/actuator/health/**").permitAll()
-                .requestMatchers("/sse/**").permitAll()   // SSE — public sensor data stream
+                // SSE for sensor streams carries the same coords as the
+                // HTTP endpoint — same rule.
+                .requestMatchers("/sse/sensors", "/sse/sensors/**").authenticated()
+                // Other SSE channels (community notifications, etc.)
+                // stay open — they don't expose location data.
+                .requestMatchers("/sse/**").permitAll()
                 .anyRequest().authenticated()
             )
 
@@ -89,8 +102,12 @@ public class SecurityConfig {
                 })
             )
 
-            // JWT filter runs before the username/password filter
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            // JWT filter runs before the username/password filter.
+            // The internal-key filter runs BEFORE the JWT filter so that
+            // a service caller (the Next.js BFF) authenticates without
+            // ever touching the user-session machinery.
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(internalApiKeyFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
