@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -19,11 +20,21 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
 
     long countByUserIdAndReadAtIsNull(UUID userId);
 
+    /**
+     * @Modifying queries require an active transaction. Without the
+     * @Transactional on each one, the UPDATE silently threw
+     * TransactionRequiredException, the controller returned 500, the
+     * BFF swallowed the error, and the bell's optimistic decrement
+     * won for the session — but after a refresh the unread count was
+     * still 1 because the row was never actually updated.
+     */
     @Modifying
+    @Transactional
     @Query("UPDATE UserNotification n SET n.readAt = :now WHERE n.id = :id AND n.userId = :userId AND n.readAt IS NULL")
     int markRead(@Param("id") UUID id, @Param("userId") UUID userId, @Param("now") Instant now);
 
     @Modifying
+    @Transactional
     @Query("UPDATE UserNotification n SET n.readAt = :now WHERE n.userId = :userId AND n.readAt IS NULL")
     int markAllRead(@Param("userId") UUID userId, @Param("now") Instant now);
 
@@ -32,6 +43,7 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
      * recent 200 per user. Called from a scheduled job in NotificationService.
      */
     @Modifying
+    @Transactional
     @Query(value = """
             DELETE FROM user_notifications
              WHERE id IN (
