@@ -78,6 +78,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,
                     "/sensors",
                     "/sensors/**").authenticated()
+                // /internal/** is the service-to-service surface for
+                // the Vercel BFF (currently: web-push subscription
+                // fan-out). Locked to ROLE_SERVICE, which the
+                // InternalApiKeyFilter grants when a valid X-Internal-
+                // Key header is presented. Method-level @PreAuthorize
+                // on the controllers double-checks; this rule means
+                // even an unannotated endpoint under /internal/ never
+                // accidentally becomes user-reachable.
+                .requestMatchers("/internal/**").hasRole("SERVICE")
                 .requestMatchers("/actuator/health/**").permitAll()
                 // SSE for sensor streams carries the same coords as the
                 // HTTP endpoint — same rule.
