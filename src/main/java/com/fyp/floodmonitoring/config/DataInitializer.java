@@ -58,6 +58,15 @@ public class DataInitializer implements CommandLineRunner {
             },
             () -> {
                 User admin = User.builder()
+                        // Deterministic UUIDv5(email) so the same admin
+                        // gets the same id on every freshly-provisioned
+                        // database — community here AND CRM. Without
+                        // this, JPA's @UuidGenerator would mint a random
+                        // UUID per service, the two DBs diverge, and
+                        // cross-service SSO 401s when CRM Java looks up
+                        // a sub it doesn't have. See UserIdGenerator
+                        // for the full rationale.
+                        .id(UserIdGenerator.forEmail(email))
                         .firstName(seedFirstName.trim())
                         .lastName(seedLastName.trim())
                         .email(email)
@@ -65,7 +74,8 @@ public class DataInitializer implements CommandLineRunner {
                         .role("admin")
                         .build();
                 userRepository.save(admin);
-                log.info("DataInitializer: created admin account {}", email);
+                log.info("DataInitializer: created admin account {} with id={}",
+                        email, admin.getId());
             }
         );
     }
