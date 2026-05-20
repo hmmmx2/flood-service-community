@@ -3,6 +3,7 @@ package com.fyp.floodmonitoring.controller;
 import com.fyp.floodmonitoring.dto.request.*;
 import com.fyp.floodmonitoring.dto.response.LoginResponseDto;
 import com.fyp.floodmonitoring.dto.response.RegisterPendingDto;
+import com.fyp.floodmonitoring.security.ratelimit.RateLimit;
 import com.fyp.floodmonitoring.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,17 +38,49 @@ public class AuthController {
 
     private final AuthService authService;
 
+    // Rate limit rationale (per QA Sprint-1 P0-5):
+    //
+    //   /auth/register             — anti-spam-signup. 5/IP/hour, 30/day.
+    //   /auth/verify-email         — single-shot, no per-email rate; uses
+    //                                attempt counter on the code itself.
+    //   /auth/resend-verification  — prevent email-bombing real users.
+    //   /auth/login                — anti-brute-force. 10 attempts per IP
+    //                                per hour. Per-email check needs to
+    //                                read the request body in the inter-
+    //                                ceptor (left as a follow-up); for now,
+    //                                an attacker on a single IP can't
+    //                                cycle >10 attempts/hour against any
+    //                                account, which kills credential
+    //                                stuffing at scale.
+    //   /auth/refresh              — burst-friendly (legit clients refresh
+    //                                ~once per 15 min). 30/min handles
+    //                                token-rotation churn on busy sessions.
+    //   /auth/forgot-password      — anti-email-bomb. 5/IP/hour, 20/day.
+    //   /auth/verify-reset-code    — anti-code-bruteforce. 10/IP/hour.
+    //   /auth/reset-password       — anti-code-replay. 5/IP/hour.
+    //   /auth/change-password      — authenticated; relies on per-user
+    //                                keying. 10/hour.
+    //
+    // All limits are per-bucket; the interceptor reads the @RateLimit
+    // annotation, increments a counter in Redis keyed by user-id (or
+    // IP when unauthenticated), and returns HTTP 429 with a Retry-After
+    // header when any window is exceeded. Fail-open on Redis outage so
+    // the limiter never causes an availability incident.
+
     @PostMapping("/register")
+    @RateLimit(key = "auth.register", perMinute = 3, perHour = 5, perDay = 30)
     public ResponseEntity<RegisterPendingDto> register(@Valid @RequestBody RegisterRequest req) {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(authService.register(req));
     }
 
     @PostMapping("/verify-email")
+    @RateLimit(key = "auth.verifyEmail", perMinute = 10, perHour = 30)
     public ResponseEntity<LoginResponseDto> verifyEmail(@Valid @RequestBody VerifyEmailRequest req) {
         return ResponseEntity.ok(authService.verifyEmail(req));
     }
 
     @PostMapping("/resend-verification")
+    @RateLimit(key = "auth.resendVerification", perMinute = 1, perHour = 5)
     public ResponseEntity<Map<String, String>> resendVerification(
             @Valid @RequestBody ResendVerificationRequest req) {
 
@@ -57,11 +90,13 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+    @RateLimit(key = "auth.login", perMinute = 5, perHour = 10)
     public ResponseEntity<LoginResponseDto> login(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(authService.login(req));
     }
 
     @PostMapping("/refresh")
+    @RateLimit(key = "auth.refresh", perMinute = 30, perHour = 200)
     public ResponseEntity<Map<String, String>> refresh(@RequestBody Map<String, String> body) {
         String refreshToken = body.get("refreshToken");
         if (refreshToken == null || refreshToken.isBlank()) {
@@ -73,6 +108,7 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
+    @RateLimit(key = "auth.forgotPassword", perMinute = 1, perHour = 5, perDay = 20)
     public ResponseEntity<Map<String, String>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest req) {
 
@@ -88,6 +124,7 @@ public class AuthController {
     }
 
     @PostMapping("/verify-reset-code")
+    @RateLimit(key = "auth.verifyResetCode", perMinute = 5, perHour = 10)
     public ResponseEntity<Map<String, String>> verifyResetCode(
             @Valid @RequestBody VerifyResetCodeRequest req) {
 
@@ -96,6 +133,7 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
+    @RateLimit(key = "auth.resetPassword", perMinute = 3, perHour = 5)
     public ResponseEntity<Map<String, String>> resetPassword(
             @Valid @RequestBody ResetPasswordRequest req) {
 
@@ -109,6 +147,7 @@ public class AuthController {
      * Unlike /reset-password, no email reset code is needed.
      */
     @PostMapping("/change-password")
+    @RateLimit(key = "auth.changePassword", perMinute = 3, perHour = 10)
     public ResponseEntity<Map<String, String>> changePassword(
             @AuthenticationPrincipal UserDetails principal,
             @Valid @RequestBody ChangePasswordRequest req) {
