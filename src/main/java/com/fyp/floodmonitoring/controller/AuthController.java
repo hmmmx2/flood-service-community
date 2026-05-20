@@ -107,6 +107,35 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("accessToken", accessToken, "refreshToken", refreshToken));
     }
 
+    /**
+     * Revokes the bearer access token (adds its jti to the
+     * RevokedTokenStore for the remaining lifetime of the token) AND
+     * deletes the paired refresh-token row if supplied in the body.
+     *
+     * Idempotent — calling logout with no tokens at all returns 200
+     * (the cookies on the Vercel side are already cleared by the time
+     * we get here; this is server-side defence-in-depth).
+     *
+     * Rate-limited tightly (3/min, 10/hr) because legitimate logouts
+     * are infrequent and a forced-logout DoS is the only abuse case
+     * worth caring about.
+     */
+    @PostMapping("/logout")
+    @RateLimit(key = "auth.logout", perMinute = 3, perHour = 10)
+    public ResponseEntity<Map<String, String>> logout(
+            @org.springframework.web.bind.annotation.RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestBody(required = false) Map<String, String> body) {
+
+        String accessToken = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            accessToken = authHeader.substring(7);
+        }
+        String refreshToken = body == null ? null : body.get("refreshToken");
+
+        authService.logout(accessToken, refreshToken);
+        return ResponseEntity.ok(Map.of("message", "Logged out"));
+    }
+
     @PostMapping("/forgot-password")
     @RateLimit(key = "auth.forgotPassword", perMinute = 1, perHour = 5, perDay = 20)
     public ResponseEntity<Map<String, String>> forgotPassword(

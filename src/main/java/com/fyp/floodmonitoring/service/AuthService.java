@@ -39,6 +39,7 @@ public class AuthService {
     private final JwtTokenProvider                tokenProvider;
     private final PasswordEncoder                 passwordEncoder;
     private final EmailService                    emailService;
+    private final com.fyp.floodmonitoring.security.RevokedTokenStore revokedTokenStore;
 
     @Value("${app.jwt.refresh-token-expiry-ms}")
     private long refreshTokenExpiryMs;
@@ -188,6 +189,64 @@ public class AuthService {
 
         userRepository.updateLastLogin(user.getId(), Instant.now());
         return buildSession(user);
+    }
+
+    // ── Logout ────────────────────────────────────────────────────────────────
+
+    /**
+     * Server-side revocation of an access token + its paired refresh
+     * token. Called by {@code POST /auth/logout}.
+     *
+     * <p>Two server-state effects, both best-effort:
+     * <ol>
+     *   <li><b>Access token</b> — adds its {@code jti} claim to
+     *       {@link RevokedTokenStore} with a TTL equal to the remaining
+     *       lifetime of the token. {@link JwtAuthenticationFilter}
+     *       then rejects any further requests bearing this token,
+     *       closing the "stolen access token replays for 15 min" gap.</li>
+     *   <li><b>Refresh token</b> — when provided, deletes the matching
+     *       row from {@code refresh_tokens}. The next refresh attempt
+     *       with this token returns 401, forcing a fresh login.</li>
+     * </ol>
+     *
+     * <p>Both arguments are nullable — the endpoint accepts logout
+     * with either token alone. If both are missing it's a no-op
+     * (idempotent). Per-jti revocation is what closes the security
+     * gap; the refresh-token cleanup is hygiene.</p>
+     */
+    @Transactional
+    public void logout(String accessToken, String refreshToken) {
+        // 1. Access-token revocation. We don't need the token to be
+        //    structurally valid here — the filter has already accepted
+        //    it before routing to this endpoint, so jti + exp are
+        //    trustworthy. (We still defensively check that the parse
+        //    succeeds and the jti is present.)
+        if (accessToken != null && !accessToken.isBlank()) {
+            try {
+                String jti = tokenProvider.getJtiFromAccessToken(accessToken);
+                long expEpoch = tokenProvider.getExpirySecondsFromAccessToken(accessToken);
+                long nowEpoch = System.currentTimeMillis() / 1000L;
+                long ttl = expEpoch - nowEpoch;
+                if (jti != null && !jti.isBlank() && ttl > 0) {
+                    revokedTokenStore.revoke(jti, ttl);
+                    log.info("[AuthService.logout] revoked jti={} ttl={}s", jti, ttl);
+                }
+            } catch (Exception e) {
+                // Don't fail the logout just because the access token
+                // is malformed — the cookies are already gone client-
+                // side; revocation is defence-in-depth.
+                log.warn("[AuthService.logout] could not revoke access token: {}", e.getMessage());
+            }
+        }
+
+        // 2. Refresh-token cleanup. Idempotent — delete-or-nothing.
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            try {
+                refreshTokenRepository.deleteByToken(refreshToken);
+            } catch (Exception e) {
+                log.warn("[AuthService.logout] refresh token cleanup failed: {}", e.getMessage());
+            }
+        }
     }
 
     // ── Refresh token ─────────────────────────────────────────────────────────
