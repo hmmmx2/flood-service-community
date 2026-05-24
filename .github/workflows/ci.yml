@@ -2,7 +2,7 @@ name: "FloodWatch Backend — CI/CD"
 
 on:
   push:
-    branches: [main, testing, staging]
+    branches: [main, testing]
   pull_request:
     branches: [main]
 
@@ -23,7 +23,7 @@ jobs:
           cache: 'maven'
 
       - name: Run tests
-        run: ./mvnw test -Dspring.profiles.active=integration-test --no-transfer-progress
+        run: mvn test -Dspring.profiles.active=integration-test --no-transfer-progress
         env:
           SPRING_DATASOURCE_URL: "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"
           JWT_SECRET: "ci-placeholder-not-used-profile-overrides-this"
