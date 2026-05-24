@@ -87,7 +87,7 @@ public class SecurityConfig {
                 // even an unannotated endpoint under /internal/ never
                 // accidentally becomes user-reachable.
                 .requestMatchers("/internal/**").hasRole("SERVICE")
-                .requestMatchers("/actuator/health/**").permitAll()
+                .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/actuator/info").permitAll()
                 // SSE for sensor streams carries the same coords as the
                 // HTTP endpoint — same rule.
                 .requestMatchers("/sse/sensors", "/sse/sensors/**").authenticated()
