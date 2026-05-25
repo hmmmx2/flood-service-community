@@ -62,11 +62,19 @@ public class CommunityController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Users join/leave a group (toggle) */
+    /** Users join a group. POST toggles (join when not a member). */
     @PostMapping("/groups/{slug}/membership")
     public ResponseEntity<CommunityGroupDto> toggleMembership(
             @PathVariable String slug, Authentication auth) {
         return ResponseEntity.ok(communityService.toggleMembership(slug, requireUserId(auth)));
+    }
+
+    /** Users leave a group (explicit, idempotent). The frontend leaves via
+     *  DELETE; without this handler every "Leave" errored out. */
+    @DeleteMapping("/groups/{slug}/membership")
+    public ResponseEntity<CommunityGroupDto> leaveGroup(
+            @PathVariable String slug, Authentication auth) {
+        return ResponseEntity.ok(communityService.leaveGroup(slug, requireUserId(auth)));
     }
 
     // ══ PUBLIC USER PROFILE ═══════════════════════════════════════════════════

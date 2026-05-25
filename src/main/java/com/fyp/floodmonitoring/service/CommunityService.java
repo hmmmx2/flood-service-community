@@ -122,6 +122,26 @@ public class CommunityService {
         }
     }
 
+    /**
+     * Explicit, idempotent LEAVE — backs DELETE /groups/{slug}/membership.
+     *
+     * The frontend joins with POST and leaves with DELETE, but the backend
+     * previously only exposed the POST toggle (no DELETE handler), so every
+     * "Leave" hit a missing route and surfaced "an unexpected error". This
+     * gives leave its own endpoint. Idempotent: leaving a group you're not
+     * in is a no-op success rather than an error.
+     */
+    @Transactional
+    public CommunityGroupDto leaveGroup(String slug, UUID userId) {
+        CommunityGroup group = groupRepo.findBySlug(slug)
+                .orElseThrow(() -> AppException.notFound("Group not found"));
+        if (memberRepo.existsByGroupIdAndUserId(group.getId(), userId)) {
+            memberRepo.deleteByGroupIdAndUserId(group.getId(), userId);
+            groupRepo.adjustMembers(group.getId(), -1);
+        }
+        return toGroupDto(group, false);
+    }
+
     // ── Public user profile ───────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
