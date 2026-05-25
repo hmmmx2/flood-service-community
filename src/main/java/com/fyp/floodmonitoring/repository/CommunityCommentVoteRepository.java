@@ -20,6 +20,11 @@ public interface CommunityCommentVoteRepository extends JpaRepository<CommunityC
     @Query("DELETE FROM CommunityCommentVote v WHERE v.comment.id = :commentId")
     void deleteByComment_Id(@Param("commentId") UUID commentId);
 
+    /** Clear every vote on a post's comments — used by the post-delete cascade. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM CommunityCommentVote v WHERE v.comment.post.id = :postId")
+    void deleteByPostId(@Param("postId") UUID postId);
+
     @Query("SELECT COALESCE(SUM(v.value), 0) FROM CommunityCommentVote v WHERE v.comment.id = :commentId")
     int sumValueForComment(@Param("commentId") UUID commentId);
 

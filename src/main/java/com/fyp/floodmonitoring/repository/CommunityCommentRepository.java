@@ -2,6 +2,7 @@ package com.fyp.floodmonitoring.repository;
 
 import com.fyp.floodmonitoring.entity.CommunityComment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -10,6 +11,16 @@ import java.util.List;
 import java.util.UUID;
 
 public interface CommunityCommentRepository extends JpaRepository<CommunityComment, UUID> {
+
+    /**
+     * Bulk-delete every comment on a post — used by the post-delete cascade.
+     * A single statement removes the whole (threaded) comment tree at once,
+     * so the self-referencing parent_comment_id FK (NO ACTION) is satisfied
+     * at statement end. Vote rows on these comments must be cleared first.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM CommunityComment c WHERE c.post.id = :postId")
+    void deleteAllByPostId(@Param("postId") UUID postId);
 
     /**
      * Lists all comments for a post, oldest first.
