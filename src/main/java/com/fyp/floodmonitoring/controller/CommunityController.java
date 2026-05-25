@@ -7,6 +7,7 @@ import com.fyp.floodmonitoring.dto.request.ModerateCommentRequest;
 import com.fyp.floodmonitoring.dto.request.ReportContentRequest;
 import com.fyp.floodmonitoring.dto.request.UpdateCommunityCommentRequest;
 import com.fyp.floodmonitoring.dto.request.UpdateContentReportRequest;
+import com.fyp.floodmonitoring.dto.request.UpdateGroupRequest;
 import com.fyp.floodmonitoring.dto.request.UpdatePostRequest;
 import com.fyp.floodmonitoring.dto.request.VoteCommentRequest;
 import com.fyp.floodmonitoring.dto.response.*;
@@ -235,6 +236,15 @@ public class CommunityController {
     public ResponseEntity<Void> adminDeleteGroup(@PathVariable UUID id) {
         communityService.deleteGroup(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Admin/moderator: edit a group's name, description or icon colour. */
+    @PatchMapping("/admin/groups/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OPERATIONS_MANAGER')")
+    public ResponseEntity<CommunityGroupDto> adminUpdateGroup(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateGroupRequest req) {
+        return ResponseEntity.ok(communityService.updateGroup(id, req));
     }
 
     @GetMapping("/admin/comments")

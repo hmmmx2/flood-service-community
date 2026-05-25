@@ -79,6 +79,31 @@ public class CommunityService {
         groupRepo.deleteById(groupId);
     }
 
+    /**
+     * Partial update of a group's editable fields (name / description /
+     * icon colour). Slug is immutable. The avatar letter is re-derived from
+     * the name so it stays in sync. Only non-null/non-blank values are
+     * applied, so the caller can patch a single field.
+     */
+    @Transactional
+    public CommunityGroupDto updateGroup(UUID groupId, UpdateGroupRequest req) {
+        CommunityGroup group = groupRepo.findById(groupId)
+                .orElseThrow(() -> AppException.notFound("Group not found"));
+        if (req.name() != null && !req.name().isBlank()) {
+            String name = req.name().trim();
+            group.setName(name);
+            group.setIconLetter(name.substring(0, 1).toUpperCase());
+        }
+        if (req.description() != null) {
+            group.setDescription(req.description());
+        }
+        if (req.iconColor() != null && !req.iconColor().isBlank()) {
+            group.setIconColor(req.iconColor());
+        }
+        group = groupRepo.save(group);
+        return toGroupDto(group, false);
+    }
+
     @Transactional
     public CommunityGroupDto toggleMembership(String slug, UUID userId) {
         CommunityGroup group = groupRepo.findBySlug(slug)
