@@ -2,6 +2,7 @@ package com.fyp.floodmonitoring.controller;
 
 import com.fyp.floodmonitoring.dto.request.IngestRequest;
 import com.fyp.floodmonitoring.dto.response.IngestResponse;
+import com.fyp.floodmonitoring.security.ratelimit.RateLimit;
 import com.fyp.floodmonitoring.service.IngestService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class IngestController {
     private String apiKey;
 
     @PostMapping
+    @RateLimit(key = "ingest", perMinute = 120, perHour = 3000)
     public ResponseEntity<?> ingest(
             @RequestHeader(value = "X-API-Key", required = false) String requestApiKey,
             @Valid @RequestBody IngestRequest request) {

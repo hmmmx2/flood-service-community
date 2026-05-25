@@ -7,24 +7,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * QA P0-3 — Startup-time guard that surfaces production-unsafe Spring
- * config in the logs the moment the service comes up.
+ * Startup-time guard for production-unsafe configuration.
  *
- * Concretely: warn if {@code hibernate.ddl-auto = update} is active
- * in production. The setting lets JPA mutate the schema based on
- * {@code @Entity} class changes. That's fine in local dev (drop the
- * database, rebuild) but dangerous in prod — an accidental entity
- * rename or removed field silently mutates the live schema with no
- * audit trail.
- *
- * <p>The fix is operational, not code: set {@code HIBERNATE_DDL_AUTO
- * =validate} on Railway and run {@code scripts/apply-migrations.mjs}
- * for every subsequent schema change. This guard makes the misconfig
- * visible instead of letting it sit silently until the day a
- * deployment drops a column.
- *
- * <p>Does NOT prevent startup — the service still boots. We only
- * emit a loud warning so ops + monitoring sees it.
+ * Production fails closed for schema auto-mutation and missing JWT secrets.
+ * Local/dev/test environments still log the active settings so developers can
+ * run with ddl-auto=update or create-drop without fighting the guard.
  */
 @Slf4j
 @Configuration
@@ -39,8 +26,20 @@ public class StartupConfigGuard {
     @Value("${app.environment:development}")
     private String environment;
 
+    @Value("${app.jwt.secret:}")
+    private String jwtSecret;
+
+    @Value("${app.jwt.refresh-secret:}")
+    private String jwtRefreshSecret;
+
+    @Value("${app.cors.allowed-origins:*}")
+    private String allowedOrigins;
+
+    @Value("${ai.service.api-key:}")
+    private String aiServiceApiKey;
+
     @Bean
-    public ApplicationRunner ddlAutoAuditRunner() {
+    public ApplicationRunner startupConfigAuditRunner() {
         return args -> {
             boolean looksProd =
                     "prod".equalsIgnoreCase(activeProfile)
@@ -54,17 +53,29 @@ public class StartupConfigGuard {
                             || "create-drop".equalsIgnoreCase(ddlAuto);
 
             if (looksProd && mutatesSchema) {
-                log.warn(
-                        "[StartupConfigGuard] ⚠ hibernate.ddl-auto={} on profile={} (env={}). "
-                                + "Schema can be auto-mutated by JPA. Set HIBERNATE_DDL_AUTO=validate "
-                                + "on Railway and apply explicit migrations via scripts/apply-migrations.mjs. "
-                                + "See RUNBOOK.md → 'Migrating to Railway Postgres' for the procedure.",
-                        ddlAuto, activeProfile, environment);
-            } else {
-                log.info(
-                        "[StartupConfigGuard] hibernate.ddl-auto={} (profile={}, env={}) — OK",
-                        ddlAuto, activeProfile, environment);
+                throw new IllegalStateException(
+                        "[StartupConfigGuard] hibernate.ddl-auto=" + ddlAuto
+                                + " on profile=" + activeProfile + " (env=" + environment + "). "
+                                + "Set HIBERNATE_DDL_AUTO=validate in production and apply explicit migrations.");
             }
+
+            if (looksProd && (jwtSecret.isBlank() || jwtRefreshSecret.isBlank())) {
+                throw new IllegalStateException(
+                        "[StartupConfigGuard] JWT_SECRET and JWT_REFRESH_SECRET must be configured in production.");
+            }
+
+            if (looksProd && "*".equals(allowedOrigins.trim())) {
+                throw new IllegalStateException(
+                        "[StartupConfigGuard] app.cors.allowed-origins must not be '*' in production.");
+            }
+
+            if (looksProd && aiServiceApiKey.isBlank()) {
+                throw new IllegalStateException(
+                        "[StartupConfigGuard] AI_SERVICE_API_KEY must be configured in production.");
+            }
+
+            log.info("[StartupConfigGuard] hibernate.ddl-auto={} (profile={}, env={}) - OK",
+                    ddlAuto, activeProfile, environment);
         };
     }
 }

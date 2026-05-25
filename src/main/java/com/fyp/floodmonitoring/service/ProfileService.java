@@ -6,6 +6,7 @@ import com.fyp.floodmonitoring.entity.User;
 import com.fyp.floodmonitoring.enums.Role;
 import com.fyp.floodmonitoring.exception.AppException;
 import com.fyp.floodmonitoring.repository.UserRepository;
+import com.fyp.floodmonitoring.util.ImageDataUrlValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,7 +49,7 @@ public class ProfileService {
             user.setLocationLabel(req.locationLabel().isBlank() ? null : req.locationLabel().trim());
         }
         if (req.avatarUrl() != null) {
-            user.setAvatarUrl(req.avatarUrl().isBlank() ? null : req.avatarUrl().trim());
+            user.setAvatarUrl(ImageDataUrlValidator.cleanNullableImageUrl(req.avatarUrl(), 150_000));
         }
 
         user = userRepository.save(user);

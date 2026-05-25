@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Random;
+import java.security.SecureRandom;
 import java.util.UUID;
 
 /**
@@ -27,6 +27,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private static final List<String> DEFAULT_SETTING_KEYS =
             List.of("pushNotifications", "smsNotifications", "emailNotifications", "lowDataMode");
@@ -157,7 +158,7 @@ public class AuthService {
     /** Invalidate any pending codes for the user, mint a fresh one, and persist it. */
     private String issueEmailVerificationCode(UUID userId) {
         emailVerificationCodeRepository.invalidateAllForUser(userId);
-        String code = String.format("%06d", new Random().nextInt(900000) + 100000);
+        String code = String.format("%06d", SECURE_RANDOM.nextInt(900000) + 100000);
         emailVerificationCodeRepository.save(EmailVerificationCode.builder()
                 .userId(userId)
                 .code(code)
@@ -296,7 +297,7 @@ public class AuthService {
 
         resetCodeRepository.invalidateAllForUser(user.getId());
 
-        String code = String.format("%06d", new Random().nextInt(900000) + 100000);
+        String code = String.format("%06d", SECURE_RANDOM.nextInt(900000) + 100000);
         PasswordResetCode resetCode = PasswordResetCode.builder()
                 .userId(user.getId())
                 .code(code)

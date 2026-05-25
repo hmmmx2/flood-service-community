@@ -71,6 +71,16 @@ public class User {
     @Column(name = "push_token", length = 500)
     private String pushToken;
 
+    @Column(name = "mfa_enabled", nullable = false)
+    @Builder.Default
+    private boolean mfaEnabled = false;
+
+    @Column(name = "mfa_secret", length = 255)
+    private String mfaSecret;
+
+    @Column(name = "mfa_recovery_codes", columnDefinition = "TEXT")
+    private String mfaRecoveryCodes;
+
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
