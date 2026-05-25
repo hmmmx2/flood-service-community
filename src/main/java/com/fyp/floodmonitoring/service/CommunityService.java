@@ -784,10 +784,19 @@ public class CommunityService {
     }
 
     private CommunityGroupDto toGroupDto(CommunityGroup g, boolean joinedByMe) {
+        // Report LIVE counts from the source tables instead of the
+        // denormalized members_count / posts_count columns. Those columns
+        // are maintained by +/- increments and drift out of sync whenever
+        // rows are created outside that path — e.g. posts seeded directly
+        // into the DB (which is exactly why a group could show "0 posts"
+        // while its feed clearly has posts). Counting live keeps the
+        // About panel honest regardless of how the rows got there.
+        int liveMembers = (int) memberRepo.countByGroupId(g.getId());
+        int livePosts = (int) postRepo.countByGroupId(g.getId());
         return new CommunityGroupDto(
                 g.getId().toString(), g.getSlug(), g.getName(), g.getDescription(),
                 g.getIconLetter(), g.getIconColor(),
-                g.getMembersCount(), g.getPostsCount(), joinedByMe, g.getCreatedAt()
+                liveMembers, livePosts, joinedByMe, g.getCreatedAt()
         );
     }
 

@@ -14,6 +14,10 @@ public interface CommunityGroupMemberRepository extends JpaRepository<CommunityG
 
     void deleteByGroupIdAndUserId(UUID groupId, UUID userId);
 
+    /** Live membership count for a group — source of truth for the group
+     *  DTO's membersCount (the denormalized column can drift). */
+    long countByGroupId(UUID groupId);
+
     @Query("SELECT m.groupId FROM CommunityGroupMember m WHERE m.userId = :userId")
     List<UUID> findGroupIdByUserId(@Param("userId") UUID userId);
 

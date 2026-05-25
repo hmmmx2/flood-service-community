@@ -20,6 +20,10 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, UU
     Page<CommunityPost> findByGroupIdOrderByCreatedAtDesc(UUID groupId, Pageable pageable);
     Page<CommunityPost> findByGroupIdOrderByLikesCountDescCreatedAtDesc(UUID groupId, Pageable pageable);
 
+    /** Live post count for a group — source of truth for the group DTO's
+     *  postsCount (the denormalized column can drift, e.g. on seeded rows). */
+    long countByGroupId(UUID groupId);
+
     // Per-user profile feed — paginated newest-first.
     Page<CommunityPost> findByAuthor_IdOrderByCreatedAtDesc(UUID authorId, Pageable pageable);
     long countByAuthor_Id(UUID authorId);
