@@ -25,8 +25,17 @@ public class Blog {
     @Column(name = "image_key", length = 50)
     private String imageKey;
 
-    /** External image URL. Takes precedence over imageKey when set. */
-    @Column(name = "image_url", length = 500)
+    /**
+     * Hero image — either an external URL or, when uploaded via the CRM/web
+     * uploader, a base64 `data:` URL (the image is resized to 1280×720 but
+     * still encodes to tens of KB). Must be TEXT: the old VARCHAR(500) cap
+     * overflowed on every uploaded image, throwing a "value too long"
+     * SQL error that surfaced as a generic 500 ("An unexpected error
+     * occurred") and blocked blog creation whenever a Hero image was set.
+     * Mirrors the user `avatar_url` TEXT column, which stores the same kind
+     * of payload.
+     */
+    @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
     /** Content category e.g. "Flood Alert", "Safety Tips", "Community", "Updates". */
