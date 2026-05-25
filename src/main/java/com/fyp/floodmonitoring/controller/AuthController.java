@@ -69,7 +69,11 @@ public class AuthController {
 
     @PostMapping("/register")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     @RateLimit(key = "auth.register", perMinute = 3, perHour = 5, perDay = 30)
+=======
+    @RateLimit(key = "auth.register", perMinute = 3, perHour = 10, perDay = 20)
+>>>>>>> Stashed changes
 =======
     @RateLimit(key = "auth.register", perMinute = 3, perHour = 10, perDay = 20)
 >>>>>>> Stashed changes
@@ -79,7 +83,11 @@ public class AuthController {
 
     @PostMapping("/verify-email")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     @RateLimit(key = "auth.verifyEmail", perMinute = 10, perHour = 30)
+=======
+    @RateLimit(key = "auth.verify-email", perMinute = 5, perHour = 20)
+>>>>>>> Stashed changes
 =======
     @RateLimit(key = "auth.verify-email", perMinute = 5, perHour = 20)
 >>>>>>> Stashed changes
@@ -89,7 +97,11 @@ public class AuthController {
 
     @PostMapping("/resend-verification")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     @RateLimit(key = "auth.resendVerification", perMinute = 1, perHour = 5)
+=======
+    @RateLimit(key = "auth.resend-verification", perMinute = 2, perHour = 8)
+>>>>>>> Stashed changes
 =======
     @RateLimit(key = "auth.resend-verification", perMinute = 2, perHour = 8)
 >>>>>>> Stashed changes
@@ -103,7 +115,11 @@ public class AuthController {
 
     @PostMapping("/login")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     @RateLimit(key = "auth.login", perMinute = 5, perHour = 10)
+=======
+    @RateLimit(key = "auth.login", perMinute = 5, perHour = 30)
+>>>>>>> Stashed changes
 =======
     @RateLimit(key = "auth.login", perMinute = 5, perHour = 30)
 >>>>>>> Stashed changes
@@ -113,7 +129,11 @@ public class AuthController {
 
     @PostMapping("/refresh")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     @RateLimit(key = "auth.refresh", perMinute = 30, perHour = 200)
+=======
+    @RateLimit(key = "auth.refresh", perMinute = 20, perHour = 120)
+>>>>>>> Stashed changes
 =======
     @RateLimit(key = "auth.refresh", perMinute = 20, perHour = 120)
 >>>>>>> Stashed changes
@@ -158,7 +178,11 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     @RateLimit(key = "auth.forgotPassword", perMinute = 1, perHour = 5, perDay = 20)
+=======
+    @RateLimit(key = "auth.forgot-password", perMinute = 3, perHour = 10)
+>>>>>>> Stashed changes
 =======
     @RateLimit(key = "auth.forgot-password", perMinute = 3, perHour = 10)
 >>>>>>> Stashed changes
@@ -178,7 +202,11 @@ public class AuthController {
 
     @PostMapping("/verify-reset-code")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     @RateLimit(key = "auth.verifyResetCode", perMinute = 5, perHour = 10)
+=======
+    @RateLimit(key = "auth.verify-reset-code", perMinute = 5, perHour = 20)
+>>>>>>> Stashed changes
 =======
     @RateLimit(key = "auth.verify-reset-code", perMinute = 5, perHour = 20)
 >>>>>>> Stashed changes
@@ -191,7 +219,11 @@ public class AuthController {
 
     @PostMapping("/reset-password")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     @RateLimit(key = "auth.resetPassword", perMinute = 3, perHour = 5)
+=======
+    @RateLimit(key = "auth.reset-password", perMinute = 3, perHour = 10)
+>>>>>>> Stashed changes
 =======
     @RateLimit(key = "auth.reset-password", perMinute = 3, perHour = 10)
 >>>>>>> Stashed changes
