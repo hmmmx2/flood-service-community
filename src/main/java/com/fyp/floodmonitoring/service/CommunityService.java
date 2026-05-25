@@ -28,6 +28,7 @@ public class CommunityService {
     private final CommunityCommentRepository commentRepo;
     private final CommunityCommentVoteRepository voteRepo;
     private final CommunityPostLikeRepository likeRepo;
+    private final ContentReportRepository contentReportRepo;
     private final CommunityGroupRepository groupRepo;
     private final CommunityGroupMemberRepository memberRepo;
     private final UserRepository userRepo;
@@ -334,10 +335,30 @@ public class CommunityService {
         if (!isAdmin && !post.getAuthor().getId().equals(requesterId)) {
             throw AppException.forbidden("You can only delete your own posts");
         }
-        if (post.getGroup() != null) {
-            groupRepo.adjustPosts(post.getGroup().getId(), -1);
+
+        // Application-level cascade. The child FKs are NO ACTION (no DB-level
+        // ON DELETE CASCADE — and any cascade from a fresh schema did not
+        // survive the Neon→Railway migration), so deleting a post that has
+        // any comment / like / vote otherwise raises a constraint violation
+        // that surfaces to the user as a 500. Remove dependants in
+        // dependency order, then the post:
+        //   1. moderation reports on the post + its comments (no FK — hygiene,
+        //      and the comment query must run before the comments are gone)
+        //   2. votes on the post's comments (FK community_comment_votes.comment_id)
+        //   3. the comments                 (FK community_comments.post_id)
+        //   4. likes on the post            (FK community_post_likes.post_id)
+        final UUID groupId = post.getGroup() != null ? post.getGroup().getId() : null;
+        contentReportRepo.deleteCommentReportsForPost(postId);
+        contentReportRepo.deleteByTarget("POST", postId);
+        voteRepo.deleteByPostId(postId);
+        commentRepo.deleteAllByPostId(postId);
+        likeRepo.deleteByPostId(postId);
+        if (groupId != null) {
+            groupRepo.adjustPosts(groupId, -1);
         }
-        postRepo.delete(post);
+        // deleteById re-fetches a managed instance — the bulk @Modifying
+        // deletes above clear the persistence context, detaching `post`.
+        postRepo.deleteById(postId);
     }
 
     /**

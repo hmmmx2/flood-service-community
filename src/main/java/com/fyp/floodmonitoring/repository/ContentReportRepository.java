@@ -38,4 +38,15 @@ public interface ContentReportRepository extends JpaRepository<ContentReport, UU
     @Query("DELETE FROM ContentReport r WHERE r.targetType = :targetType AND r.targetId = :targetId")
     @org.springframework.data.jpa.repository.Modifying
     int deleteByTarget(@Param("targetType") String targetType, @Param("targetId") UUID targetId);
+
+    /**
+     * Clear COMMENT-target reports for every comment on a post — used by the
+     * post-delete cascade so a removed post leaves no orphaned moderation
+     * entries pointing at its (now-deleted) comments. Must run before the
+     * comments themselves are deleted (the subquery reads them).
+     */
+    @Query("DELETE FROM ContentReport r WHERE r.targetType = 'COMMENT' AND r.targetId IN "
+         + "(SELECT c.id FROM CommunityComment c WHERE c.post.id = :postId)")
+    @org.springframework.data.jpa.repository.Modifying
+    int deleteCommentReportsForPost(@Param("postId") UUID postId);
 }
