@@ -36,6 +36,11 @@ public class AvatarColumnMigration {
     @Async
     public void widenUploaderColumns() {
         widen("users", "avatar_url");
+        // Blog hero images are uploaded as base64 data: URLs via the CRM
+        // uploader; the legacy VARCHAR(500) overflowed and blocked blog
+        // creation with a generic 500. Self-heal here so we never depend on
+        // running a manual ALTER against the right (Neon) database by hand.
+        widen("blogs", "image_url");
     }
 
     private void widen(String table, String column) {
