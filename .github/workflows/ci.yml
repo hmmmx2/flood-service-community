@@ -2,9 +2,12 @@ name: "FloodWatch Backend — CI/CD"
 
 on:
   push:
-    branches: [main, testing]
+    branches: [testing]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: write
 
 jobs:
   test:
@@ -39,21 +42,23 @@ jobs:
           path: target/surefire-reports/
           retention-days: 7
 
-  deploy:
-    name: "Deploy to Railway (production)"
+  promote:
+    name: "Promote to production branch"
     needs: test
+    if: success()
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Trigger Railway redeploy
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push testing to production branch
         run: |
-          echo "Triggering Railway production redeploy..."
-          curl -s -X POST \
-            https://backboard.railway.app/graphql/v2 \
-            -H "Authorization: Bearer ${{ secrets.RAILWAY_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "query": "mutation { serviceInstanceRedeploy(environmentId: \"${{ secrets.RAILWAY_ENVIRONMENT_ID }}\", serviceId: \"${{ secrets.RAILWAY_SERVICE_ID }}\") }"
-            }'
-          echo "Railway redeploy triggered."
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git checkout production
+          git merge testing --ff-only
+          git push origin production
