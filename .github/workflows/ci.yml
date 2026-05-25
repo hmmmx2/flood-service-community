@@ -59,6 +59,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+          git fetch origin
           git checkout production
-          git merge testing --no-ff -m "ci: promote testing to production"
-          git push origin production
+          git reset --hard origin/testing
+          git push origin production --force
