@@ -15,13 +15,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger Jenkins build
+      - name: Trigger Jenkins and wait for result
         run: |
           echo "Triggering Jenkins test server on Azure..."
-          curl -s -X POST \
+          
+          # Trigger the build
+          QUEUE_URL=$(curl -s -i -X POST \
             "http://20.17.99.180:8080/job/FloodWatch-Backend-Tests/build?token=floodwatch-jenkins-token" \
-            --user "floodwatch:1102e620631fe885aa18fe58bc71924fe9"
-          echo "Jenkins build triggered at http://20.17.99.180:8080"
+            --user "floodwatch:1102e620631fe885aa18fe58bc71924fe9" \
+            | grep -i "Location:" | tr -d '\r' | awk '{print $2}')
+          
+          echo "Queued at: $QUEUE_URL"
+          sleep 5
+          
+          # Get the build number from the queue
+          BUILD_URL=$(curl -s "${QUEUE_URL}api/json" \
+            --user "floodwatch:1102e620631fe885aa18fe58bc71924fe9" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('executable',{}).get('url',''))")
+          
+          echo "Build URL: $BUILD_URL"
+          sleep 2
+          
+          # Poll until build finishes
+          while true; do
+            RESULT=$(curl -s "${BUILD_URL}api/json" \
+              --user "floodwatch:1102e620631fe885aa18fe58bc71924fe9" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('result','IN_PROGRESS'))")
+            
+            echo "Jenkins build status: $RESULT"
+            
+            if [ "$RESULT" = "SUCCESS" ]; then
+              echo "Jenkins tests passed!"
+              exit 0
+            elif [ "$RESULT" = "FAILURE" ] || [ "$RESULT" = "ABORTED" ]; then
+              echo "Jenkins tests FAILED — blocking promotion to production"
+              exit 1
+            fi
+            
+            echo "Still running... waiting 10 seconds"
+            sleep 2
+          done
 
   promote:
     name: "Promote to production branch"
