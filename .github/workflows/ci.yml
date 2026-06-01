@@ -20,7 +20,7 @@ jobs:
           echo "Triggering Jenkins test server on Azure..."
           curl -s -X POST \
             "http://20.17.99.180:8080/job/FloodWatch-Backend-Tests/build?token=floodwatch-jenkins-token" \
-            --user "floodwatch:FloodWatch@Jenkins2026"
+            --user "floodwatch:1102e620631fe885aa18fe58bc71924fe9"
           echo "Jenkins build triggered at http://20.17.99.180:8080"
 
   promote:
