@@ -26,7 +26,7 @@ jobs:
             | grep -i "Location:" | tr -d '\r' | awk '{print $2}')
           
           echo "Queued at: $QUEUE_URL"
-          sleep 5
+          sleep 15
           
           # Get the build number from the queue
           BUILD_URL=$(curl -s "${QUEUE_URL}api/json" \
