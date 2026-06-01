@@ -1,0 +1,46 @@
+name: "FloodWatch Backend — CI/CD"
+
+on:
+  push:
+    branches: [testing]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  trigger-jenkins:
+    name: "Trigger Jenkins on Azure"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Jenkins build
+        run: |
+          echo "Triggering Jenkins test server on Azure..."
+          curl -s -X POST \
+            "http://20.17.99.180:8080/job/FloodWatch-Backend-Tests/build?token=floodwatch-jenkins-token" \
+            --user "floodwatch:FloodWatch@Jenkins2026"
+          echo "Jenkins build triggered at http://20.17.99.180:8080"
+
+  promote:
+    name: "Promote to production branch"
+    needs: trigger-jenkins
+    if: success()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push testing to production branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git fetch origin
+          git checkout production
+          git reset --hard origin/testing
+          git push origin production --force
