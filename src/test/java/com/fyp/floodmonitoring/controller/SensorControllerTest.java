@@ -4,6 +4,8 @@ import com.fyp.floodmonitoring.dto.response.SensorNodeDto;
 import com.fyp.floodmonitoring.config.SecurityConfig;
 import com.fyp.floodmonitoring.config.TestSecurityConfig;
 import com.fyp.floodmonitoring.security.JwtAuthenticationFilter;
+import com.fyp.floodmonitoring.security.ratelimit.RateLimitWebConfig;
+import com.fyp.floodmonitoring.security.ratelimit.RateLimitInterceptor;
 import com.fyp.floodmonitoring.service.SensorService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,7 +27,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     controllers = SensorController.class,
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class),
-        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class)
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class),
+        // @WebMvcTest auto-registers HandlerInterceptor beans, but RateLimitInterceptor
+        // needs a RateLimiter that isn't in the slice. Exclude both it and its registrar.
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitWebConfig.class),
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitInterceptor.class)
     }
 )
 @Import(TestSecurityConfig.class)
@@ -40,6 +46,7 @@ class SensorControllerTest {
             "uuid-" + nodeId, nodeId, "Node " + nodeId, status,
             "1.2 km", List.of(110.3592, 1.5533),
             "Kuching", "Sungai Sarawak", "Sarawak",
+            null,                       // address (reverse-geocoded, nullable)
             level, false, "2025-01-01T10:00:00Z", "2024-01-01T00:00:00Z",
             1.5533, 110.3592
         );

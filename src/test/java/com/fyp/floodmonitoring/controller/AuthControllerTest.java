@@ -3,16 +3,21 @@ package com.fyp.floodmonitoring.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fyp.floodmonitoring.dto.request.LoginRequest;
 import com.fyp.floodmonitoring.dto.request.RegisterRequest;
+import com.fyp.floodmonitoring.dto.request.VerifyEmailRequest;
+import com.fyp.floodmonitoring.dto.request.ResendVerificationRequest;
 import com.fyp.floodmonitoring.dto.request.ForgotPasswordRequest;
 import com.fyp.floodmonitoring.dto.request.VerifyResetCodeRequest;
 import com.fyp.floodmonitoring.dto.request.ResetPasswordRequest;
 import com.fyp.floodmonitoring.dto.response.AuthSessionDto;
 import com.fyp.floodmonitoring.dto.response.LoginResponseDto;
+import com.fyp.floodmonitoring.dto.response.RegisterPendingDto;
 import com.fyp.floodmonitoring.dto.response.UserSummaryDto;
 import com.fyp.floodmonitoring.service.AuthService;
 import com.fyp.floodmonitoring.config.SecurityConfig;
 import com.fyp.floodmonitoring.config.TestSecurityConfig;
 import com.fyp.floodmonitoring.security.JwtAuthenticationFilter;
+import com.fyp.floodmonitoring.security.ratelimit.RateLimitWebConfig;
+import com.fyp.floodmonitoring.security.ratelimit.RateLimitInterceptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -39,7 +44,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     controllers = AuthController.class,
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class),
-        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class)
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class),
+        // @WebMvcTest auto-registers HandlerInterceptor beans, but RateLimitInterceptor
+        // needs a RateLimiter that isn't in the slice. Exclude both it and its registrar.
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitWebConfig.class),
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitInterceptor.class)
     }
 )
 @Import(TestSecurityConfig.class)
@@ -70,9 +79,15 @@ class AuthControllerTest {
     class Register {
 
         @Test
-        @DisplayName("returns 201 with session on valid registration")
-        void register_ValidRequest_Returns201() throws Exception {
-            when(authService.register(any(RegisterRequest.class))).thenReturn(mockLoginResponse);
+        @DisplayName("returns 202 Accepted with pending-verification body (email-verification flow)")
+        void register_ValidRequest_Returns202() throws Exception {
+            // Current contract: register no longer issues a session. It provisions an
+            // unverified account, emails a 6-digit code, and returns RegisterPendingDto.
+            when(authService.register(any(RegisterRequest.class)))
+                .thenReturn(new RegisterPendingDto(
+                    "john@example.com",
+                    "Enter the 6-digit code we just emailed to confirm your account.",
+                    null));
 
             RegisterRequest req = new RegisterRequest("John", "Doe", "john@example.com", "Password@123");
 
@@ -80,9 +95,9 @@ class AuthControllerTest {
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.session.accessToken").value("mock-access-token"))
-                .andExpect(jsonPath("$.user.email").value("test@example.com"));
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.email").value("john@example.com"))
+                .andExpect(jsonPath("$.message").exists());
         }
 
         @Test
@@ -115,6 +130,73 @@ class AuthControllerTest {
             RegisterRequest req = new RegisterRequest("John", "Doe", "notanemail", "Password@123");
 
             mockMvc.perform(post("/auth/register")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+        }
+    }
+
+    // ── POST /auth/verify-email ────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("POST /auth/verify-email")
+    class VerifyEmail {
+
+        @Test
+        @DisplayName("returns 200 with a real session on a valid code")
+        void verifyEmail_ValidCode_Returns200() throws Exception {
+            when(authService.verifyEmail(any(VerifyEmailRequest.class))).thenReturn(mockLoginResponse);
+
+            VerifyEmailRequest req = new VerifyEmailRequest("john@example.com", "123456");
+
+            mockMvc.perform(post("/auth/verify-email")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.session.accessToken").value("mock-access-token"))
+                .andExpect(jsonPath("$.user.email").value("test@example.com"));
+        }
+
+        @Test
+        @DisplayName("returns 400 when the code is blank")
+        void verifyEmail_BlankCode_Returns400() throws Exception {
+            VerifyEmailRequest req = new VerifyEmailRequest("john@example.com", "");
+
+            mockMvc.perform(post("/auth/verify-email")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+        }
+    }
+
+    // ── POST /auth/resend-verification ─────────────────────────────────────────
+
+    @Nested
+    @DisplayName("POST /auth/resend-verification")
+    class ResendVerification {
+
+        @Test
+        @DisplayName("returns 200 with a neutral message (never reveals account existence)")
+        void resend_ValidEmail_Returns200() throws Exception {
+            ResendVerificationRequest req = new ResendVerificationRequest("john@example.com");
+
+            mockMvc.perform(post("/auth/resend-verification")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").exists());
+        }
+
+        @Test
+        @DisplayName("returns 400 when the email is blank")
+        void resend_BlankEmail_Returns400() throws Exception {
+            ResendVerificationRequest req = new ResendVerificationRequest("");
+
+            mockMvc.perform(post("/auth/resend-verification")
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(req)))

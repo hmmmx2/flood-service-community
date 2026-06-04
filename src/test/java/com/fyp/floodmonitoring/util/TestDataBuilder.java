@@ -290,6 +290,7 @@ public final class TestDataBuilder {
                 "Kuching",
                 "Sungai Sarawak",
                 "Sarawak",
+                null,               // address (reverse-geocoded, nullable)
                 1,
                 false,
                 "2025-06-15T08:00:00Z",

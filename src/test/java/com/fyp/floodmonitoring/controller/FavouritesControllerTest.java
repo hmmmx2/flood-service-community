@@ -6,6 +6,8 @@ import com.fyp.floodmonitoring.dto.response.FavouriteNodeDto;
 import com.fyp.floodmonitoring.config.SecurityConfig;
 import com.fyp.floodmonitoring.config.TestSecurityConfig;
 import com.fyp.floodmonitoring.security.JwtAuthenticationFilter;
+import com.fyp.floodmonitoring.security.ratelimit.RateLimitWebConfig;
+import com.fyp.floodmonitoring.security.ratelimit.RateLimitInterceptor;
 import com.fyp.floodmonitoring.service.FavouritesService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,7 +36,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     controllers = FavouritesController.class,
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class),
-        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class)
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = SecurityConfig.class),
+        // @WebMvcTest auto-registers HandlerInterceptor beans, but RateLimitInterceptor
+        // needs a RateLimiter that isn't in the slice. Exclude both it and its registrar.
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitWebConfig.class),
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitInterceptor.class)
     }
 )
 @Import(TestSecurityConfig.class)
@@ -52,7 +58,8 @@ class FavouritesControllerTest {
         sampleFavourite = new FavouriteNodeDto(
             "node-uuid-001", "102782478", "Node 102782478", "active", "1.2 km",
             List.of(110.3592, 1.5533), "Kuching", "Sungai Sarawak", "Sarawak",
-            1, "2025-01-01T10:00:00Z", "2025-01-01T08:00:00Z"
+            1, "2025-01-01T10:00:00Z", "2025-01-01T08:00:00Z",
+            true, false, false, true   // email / sms / whatsapp / push channel prefs
         );
     }
 

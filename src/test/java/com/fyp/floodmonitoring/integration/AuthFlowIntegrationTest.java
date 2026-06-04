@@ -4,6 +4,7 @@ import com.fyp.floodmonitoring.dto.request.LoginRequest;
 import com.fyp.floodmonitoring.dto.request.RegisterRequest;
 import com.fyp.floodmonitoring.dto.response.AuthSessionDto;
 import com.fyp.floodmonitoring.dto.response.LoginResponseDto;
+import com.fyp.floodmonitoring.dto.response.RegisterPendingDto;
 import com.fyp.floodmonitoring.dto.response.UserProfileDto;
 import com.fyp.floodmonitoring.dto.response.UserSummaryDto;
 import com.fyp.floodmonitoring.entity.RefreshToken;
@@ -123,27 +124,27 @@ class AuthFlowIntegrationTest {
     class Registration {
 
         @Test
-        @DisplayName("returns 201 with JWT session on successful registration")
-        void register_ValidRequest_Returns201WithSession() {
-            when(userRepository.existsByEmail(TEST_EMAIL)).thenReturn(false);
+        @DisplayName("returns 202 Accepted with pending-verification body (no session until verified)")
+        void register_ValidRequest_Returns202Pending() {
+            // Current contract: registration provisions an unverified account and
+            // emails a 6-digit code; it does NOT return a session. The user must
+            // POST /auth/verify-email with that code first.
+            when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(java.util.Optional.empty());
             when(userRepository.save(any(User.class))).thenReturn(mockUser);
-            when(refreshTokenRepository.save(any())).thenReturn(null);
             doNothing().when(userSettingRepository).upsertDefault(any(), anyString());
 
             RegisterRequest req = new RegisterRequest(
                     "Integration", "Tester", TEST_EMAIL, TEST_PASSWORD
             );
 
-            ResponseEntity<LoginResponseDto> response = restTemplate.postForEntity(
-                    baseUrl + "/auth/register", req, LoginResponseDto.class
+            ResponseEntity<RegisterPendingDto> response = restTemplate.postForEntity(
+                    baseUrl + "/auth/register", req, RegisterPendingDto.class
             );
 
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().session()).isNotNull();
-            assertThat(response.getBody().session().accessToken()).isNotBlank();
-            assertThat(response.getBody().session().refreshToken()).isNotBlank();
-            assertThat(response.getBody().user().email()).isEqualTo(TEST_EMAIL);
+            assertThat(response.getBody().email()).isEqualTo(TEST_EMAIL);
+            assertThat(response.getBody().message()).isNotBlank();
         }
 
         @Test
@@ -342,15 +343,15 @@ class AuthFlowIntegrationTest {
         }
 
         @Test
-        @DisplayName("GET /sensors is public and returns 200")
-        void sensors_Public_Returns200() {
-            when(nodeRepository.findAllByOrderByNodeIdAsc()).thenReturn(java.util.Collections.emptyList());
-
-            ResponseEntity<Object[]> response = restTemplate.getForEntity(
-                    baseUrl + "/sensors", Object[].class
+        @DisplayName("GET /sensors now requires authentication → 401 without a token")
+        void sensors_Protected_Returns401WithoutToken() {
+            // Sensor coordinates were locked down (SecurityConfig: /sensors is
+            // .authenticated()). The old "public 200" assertion is obsolete.
+            ResponseEntity<Map> response = restTemplate.getForEntity(
+                    baseUrl + "/sensors", Map.class
             );
 
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         }
     }
 }

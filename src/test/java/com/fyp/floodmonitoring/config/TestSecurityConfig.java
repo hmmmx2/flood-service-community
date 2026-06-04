@@ -44,6 +44,7 @@ public class TestSecurityConfig {
                 // ── Public auth endpoints (no JWT required) ──────────────────
                 .requestMatchers(HttpMethod.POST,
                     "/auth/login", "/auth/register", "/auth/refresh",
+                    "/auth/verify-email", "/auth/resend-verification",
                     "/auth/forgot-password", "/auth/verify-reset-code",
                     "/auth/reset-password", "/ingest").permitAll()
                 // ── Public read endpoints (mirrors production SecurityConfig) ─────
